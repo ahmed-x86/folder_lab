@@ -4,6 +4,7 @@ export component Glyph inherits VerticalLayout {
     in property <image> source;
     in property <length> icon-size: 16px;
     in property <float> faded: 1.0;
+    in property <brush> tint: transparent;
 
     alignment: center;
     horizontal-stretch: 0;
@@ -17,5 +18,6 @@ export component Glyph inherits VerticalLayout {
         height: root.icon-size;
         image-fit: ImageFit.contain;
         opacity: root.faded;
+        colorize: root.tint;
     }
 }
