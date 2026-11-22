@@ -1,0 +1,102 @@
+import { Glyph } from "../components/glyph.slint";
+import { IconButton } from "../components/icon-button.slint";
+
+export component AddressBar inherits Rectangle {
+    height: 36px;
+    background: #ffffff;
+
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        padding-top: 5px;
+        padding-bottom: 5px;
+        spacing: 2px;
+
+        IconButton {
+            icon: @image-url("../icons/arrow-left.svg");
+        }
+
+        IconButton {
+            icon: @image-url("../icons/arrow-right.svg");
+            enabled: false;
+        }
+
+        IconButton {
+            icon: @image-url("../icons/arrow-up.svg");
+        }
+
+        IconButton {
+            icon: @image-url("../icons/refresh.svg");
+            enabled: false;
+        }
+
+        Rectangle {
+            width: 6px;
+        }
+
+        Rectangle {
+            horizontal-stretch: 1;
+            height: 26px;
+            border-width: 1px;
+            border-color: #d6d6d6;
+            border-radius: 2px;
+            background: #ffffff;
+
+            HorizontalLayout {
+                padding-left: 8px;
+                padding-right: 6px;
+                spacing: 6px;
+
+                Glyph {
+                    source: @image-url("../icons/pc.svg");
+                    icon-size: 16px;
+                }
+
+                Text {
+                    text: "Folder Lab";
+                    font-size: 12px;
+                    color: #222222;
+                    vertical-alignment: center;
+                    horizontal-stretch: 1;
+                }
+
+                Glyph {
+                    source: @image-url("../icons/chevron-down.svg");
+                    icon-size: 10px;
+                    faded: 0.5;
+                }
+            }
+        }
+
+        Rectangle {
+            width: 8px;
+        }
+
+        Rectangle {
+            width: 196px;
+            height: 26px;
+            border-width: 1px;
+            border-color: #d6d6d6;
+            border-radius: 2px;
+            background: #ffffff;
+
+            HorizontalLayout {
+                padding-left: 8px;
+                padding-right: 6px;
+                spacing: 6px;
+
+                Glyph {
+                    source: @image-url("../icons/search.svg");
+                    icon-size: 14px;
+                }
+
+                Text {
+                    text: "Search Folder Lab";
+                    font-size: 11px;
+                    color: #8a8a8a;
+                    vertical-alignment: center;
+                }
+            }
+        }
+    }
+}

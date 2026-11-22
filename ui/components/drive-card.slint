@@ -1,0 +1,53 @@
+import { Glyph } from "glyph.slint";
+import { UsageBar } from "usage-bar.slint";
+import { DiskInfo } from "../types.slint";
+
+export component DriveCard inherits Rectangle {
+    in property <DiskInfo> disk;
+
+    width: 250px;
+    height: 80px;
+    border-radius: 3px;
+    background: touch.has-hover ? #eaf5fd : transparent;
+    border-width: 1px;
+    border-color: touch.has-hover ? #b7dcf5 : transparent;
+
+    HorizontalLayout {
+        padding: 8px;
+        spacing: 10px;
+
+        Glyph {
+            source: @image-url("../icons/drive.svg");
+            icon-size: 48px;
+        }
+
+        VerticalLayout {
+            alignment: center;
+            spacing: 5px;
+            horizontal-stretch: 1;
+
+            Text {
+                text: root.disk.title;
+                font-size: 12px;
+                font-weight: 600;
+                color: #1a1a1a;
+                overflow: elide;
+            }
+
+            UsageBar {
+                used: root.disk.used;
+            }
+
+            Text {
+                text: root.disk.free;
+                font-size: 11px;
+                color: #3c3c3c;
+                overflow: elide;
+            }
+        }
+    }
+
+    touch := TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+    }
+}

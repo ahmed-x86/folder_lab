@@ -1,0 +1,178 @@
+import { RibbonBig } from "../components/ribbon-big.slint";
+import { RibbonSmall } from "../components/ribbon-small.slint";
+
+export component Ribbon inherits Rectangle {
+    height: 84px;
+    background: #fbfbfb;
+
+    HorizontalLayout {
+        padding-left: 6px;
+        padding-right: 6px;
+        padding-top: 4px;
+        padding-bottom: 2px;
+        spacing: 0;
+
+        // Clipboard ---------------------------------------------------
+        VerticalLayout {
+            alignment: start;
+            spacing: 1px;
+
+            HorizontalLayout {
+                height: 62px;
+                alignment: center;
+                spacing: 1px;
+
+                RibbonBig {
+                    icon: @image-url("../icons/paste.svg");
+                    label: "Paste";
+                }
+
+                VerticalLayout {
+                    alignment: center;
+                    spacing: 1px;
+
+                    RibbonSmall {
+                        icon: @image-url("../icons/cut.svg");
+                        label: "Cut";
+                    }
+
+                    RibbonSmall {
+                        icon: @image-url("../icons/copy.svg");
+                        label: "Copy";
+                    }
+                }
+            }
+
+            Text {
+                text: "Clipboard";
+                font-size: 9px;
+                color: #777777;
+                horizontal-alignment: center;
+            }
+        }
+
+        Rectangle {
+            width: 8px;
+        }
+
+        Rectangle {
+            width: 1px;
+            background: #e2e2e2;
+        }
+
+        Rectangle {
+            width: 8px;
+        }
+
+        // Organize ----------------------------------------------------
+        VerticalLayout {
+            alignment: start;
+            spacing: 1px;
+
+            HorizontalLayout {
+                height: 62px;
+                alignment: center;
+                spacing: 1px;
+
+                RibbonBig {
+                    icon: @image-url("../icons/rename.svg");
+                    label: "Rename";
+                }
+
+                RibbonBig {
+                    icon: @image-url("../icons/share.svg");
+                    label: "Share";
+                }
+
+                RibbonBig {
+                    icon: @image-url("../icons/delete.svg");
+                    label: "Delete";
+                }
+
+                VerticalLayout {
+                    alignment: center;
+                    spacing: 1px;
+
+                    RibbonSmall {
+                        icon: @image-url("../icons/move-to.svg");
+                        label: "Move to";
+                    }
+
+                    RibbonSmall {
+                        icon: @image-url("../icons/copy-to.svg");
+                        label: "Copy to";
+                    }
+                }
+
+                RibbonBig {
+                    icon: @image-url("../icons/new-folder.svg");
+                    label: "New folder";
+                }
+
+                RibbonBig {
+                    icon: @image-url("../icons/properties.svg");
+                    label: "Properties";
+                }
+            }
+
+            Text {
+                text: "Organize";
+                font-size: 9px;
+                color: #777777;
+                horizontal-alignment: center;
+            }
+        }
+
+        Rectangle {
+            width: 8px;
+        }
+
+        Rectangle {
+            width: 1px;
+            background: #e2e2e2;
+        }
+
+        Rectangle {
+            width: 8px;
+        }
+
+        // Select ------------------------------------------------------
+        VerticalLayout {
+            alignment: start;
+            spacing: 1px;
+
+            VerticalLayout {
+                height: 62px;
+                alignment: center;
+                spacing: 1px;
+
+                RibbonSmall {
+                    icon: @image-url("../icons/select-all.svg");
+                    label: "Select all";
+                    item-width: 124px;
+                }
+
+                RibbonSmall {
+                    icon: @image-url("../icons/select-none.svg");
+                    label: "Select none";
+                    item-width: 124px;
+                }
+
+                RibbonSmall {
+                    icon: @image-url("../icons/invert.svg");
+                    label: "Invert selection";
+                    item-width: 124px;
+                }
+            }
+
+            Text {
+                text: "Select";
+                font-size: 9px;
+                color: #777777;
+                horizontal-alignment: center;
+            }
+        }
+
+        Rectangle { }
+    }
+}

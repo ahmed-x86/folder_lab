@@ -1,0 +1,52 @@
+import { Glyph } from "../components/glyph.slint";
+import { DriveCard } from "../components/drive-card.slint";
+import { DiskInfo } from "../types.slint";
+
+export component ContentPane inherits Rectangle {
+    in property <[DiskInfo]> disks;
+
+    horizontal-stretch: 1;
+    background: #ffffff;
+
+    VerticalLayout {
+        padding-left: 20px;
+        padding-right: 20px;
+        padding-top: 14px;
+        padding-bottom: 14px;
+        spacing: 10px;
+
+        HorizontalLayout {
+            spacing: 6px;
+
+            Glyph {
+                source: @image-url("../icons/chevron-down.svg");
+                icon-size: 10px;
+                faded: 0.65;
+            }
+
+            Text {
+                text: "Devices and drives";
+                font-size: 13px;
+                font-weight: 600;
+                color: #1f1f1f;
+                vertical-alignment: center;
+            }
+        }
+
+        FlexboxLayout {
+            spacing: 10px;
+
+            for disk[i] in root.disks : DriveCard {
+                disk: disk;
+            }
+        }
+
+        if root.disks.length == 0 : Text {
+            text: "No mounted partitions were found.";
+            font-size: 12px;
+            color: #777777;
+        }
+
+        Rectangle { }
+    }
+}

@@ -1,0 +1,21 @@
+// An icon that is always centered vertically inside a row.
+// (A fixed-size Image placed directly in a HorizontalLayout sticks to the top.)
+export component Glyph inherits VerticalLayout {
+    in property <image> source;
+    in property <length> icon-size: 16px;
+    in property <float> faded: 1.0;
+
+    alignment: center;
+    horizontal-stretch: 0;
+    min-width: root.icon-size;
+    preferred-width: root.icon-size;
+    max-width: root.icon-size;
+
+    Image {
+        source: root.source;
+        width: root.icon-size;
+        height: root.icon-size;
+        image-fit: ImageFit.contain;
+        opacity: root.faded;
+    }
+}

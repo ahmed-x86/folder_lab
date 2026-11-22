@@ -1,0 +1,38 @@
+export component RibbonBig inherits Rectangle {
+    in property <image> icon;
+    in property <string> label;
+
+    width: 56px;
+    height: 60px;
+    border-radius: 3px;
+    background: touch.has-hover ? #e5f3fb : transparent;
+    border-width: touch.has-hover ? 1px : 0px;
+    border-color: #a9d7f2;
+
+    VerticalLayout {
+        alignment: center;
+        spacing: 3px;
+
+        HorizontalLayout {
+            alignment: center;
+            Image {
+                source: root.icon;
+                width: 24px;
+                height: 24px;
+                image-fit: ImageFit.contain;
+            }
+        }
+
+        Text {
+            text: root.label;
+            font-size: 10px;
+            color: #2b2b2b;
+            horizontal-alignment: center;
+            overflow: elide;
+        }
+    }
+
+    touch := TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+    }
+}

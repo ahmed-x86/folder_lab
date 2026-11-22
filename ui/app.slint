@@ -1,0 +1,52 @@
+import { DiskInfo } from "types.slint";
+import { TabsBar } from "sections/tabs-bar.slint";
+import { Ribbon } from "sections/ribbon.slint";
+import { AddressBar } from "sections/address-bar.slint";
+import { NavPane } from "sections/nav-pane.slint";
+import { ContentPane } from "sections/content-pane.slint";
+import { StatusBar } from "sections/status-bar.slint";
+import { ThinSeparator } from "components/thin-separator.slint";
+
+export { DiskInfo }
+
+export component AppWindow inherits Window {
+    title: "Folder Lab";
+    icon: @image-url("icons/explorer.svg");
+    preferred-width: 1000px;
+    preferred-height: 640px;
+    min-width: 700px;
+    min-height: 420px;
+    background: #ffffff;
+    default-font-family: "Noto Sans";
+    default-font-size: 12px;
+
+    in property <[DiskInfo]> disks;
+
+    VerticalLayout {
+        TabsBar { }
+        Ribbon { }
+        ThinSeparator { }
+        AddressBar { }
+        ThinSeparator { }
+
+        HorizontalLayout {
+            vertical-stretch: 1;
+
+            NavPane { }
+
+            Rectangle {
+                width: 1px;
+                background: #e4e4e4;
+            }
+
+            ContentPane {
+                disks: root.disks;
+            }
+        }
+
+        ThinSeparator { }
+        StatusBar {
+            item-count: root.disks.length;
+        }
+    }
+}

@@ -1,0 +1,49 @@
+import { Glyph } from "glyph.slint";
+
+export component SidebarItem inherits Rectangle {
+    in property <image> icon;
+    in property <string> label;
+    in property <bool> selected: false;
+    in property <bool> expandable: false;
+
+    height: 30px;
+    background: root.selected ? #e5f1fb : (touch.has-hover ? #eef4f9 : transparent);
+
+    if root.selected : Rectangle {
+        x: 0;
+        y: 0;
+        width: 3px;
+        height: 100%;
+        background: #0078d7;
+    }
+
+    HorizontalLayout {
+        padding-left: 14px;
+        padding-right: 10px;
+        spacing: 10px;
+
+        Glyph {
+            source: root.icon;
+            icon-size: 16px;
+        }
+
+        Text {
+            text: root.label;
+            font-size: 12px;
+            color: #1f1f1f;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+            overflow: elide;
+        }
+
+        if root.expandable : Glyph {
+            source: @image-url("../icons/chevron-right.svg");
+            icon-size: 10px;
+            faded: 0.45;
+        }
+    }
+
+    touch := TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+    }
+}

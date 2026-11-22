@@ -1,0 +1,22 @@
+export component IconButton inherits Rectangle {
+    in property <image> icon;
+    in property <bool> enabled: true;
+
+    width: 26px;
+    height: 26px;
+    border-radius: 2px;
+    background: touch.has-hover && root.enabled ? #e5f3fb : transparent;
+    opacity: root.enabled ? 1.0 : 0.38;
+
+    Image {
+        source: root.icon;
+        width: 16px;
+        height: 16px;
+        image-fit: ImageFit.contain;
+    }
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: MouseCursor.pointer;
+    }
+}

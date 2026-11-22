@@ -1,0 +1,37 @@
+import { Glyph } from "../components/glyph.slint";
+
+export component StatusBar inherits Rectangle {
+    in property <int> item-count;
+
+    height: 24px;
+    background: #f5f5f5;
+
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 8px;
+        spacing: 10px;
+
+        Text {
+            text: "\{root.item-count} items";
+            font-size: 11px;
+            color: #555555;
+            vertical-alignment: center;
+        }
+
+        Rectangle {
+            horizontal-stretch: 1;
+        }
+
+        Glyph {
+            source: @image-url("../icons/view-details.svg");
+            icon-size: 14px;
+            faded: 0.75;
+        }
+
+        Glyph {
+            source: @image-url("../icons/view-grid.svg");
+            icon-size: 14px;
+            faded: 0.75;
+        }
+    }
+}

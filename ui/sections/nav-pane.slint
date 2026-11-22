@@ -1,0 +1,92 @@
+import { SidebarItem } from "../components/sidebar-item.slint";
+
+export component NavPane inherits Rectangle {
+    width: 200px;
+    background: #f7f8fa;
+
+    VerticalLayout {
+        padding-top: 6px;
+        padding-bottom: 6px;
+        spacing: 0;
+
+        SidebarItem {
+            icon: @image-url("../icons/home.svg");
+            label: "Home";
+        }
+
+        SidebarItem {
+            icon: @image-url("../icons/gallery.svg");
+            label: "Gallery";
+        }
+
+
+        Rectangle {
+            height: 9px;
+
+            Rectangle {
+                y: 4px;
+                height: 1px;
+                background: #e1e4e8;
+            }
+        }
+
+        SidebarItem {
+            icon: @image-url("../icons/folder-desktop.svg");
+            label: "Desktop";
+            expandable: true;
+        }
+
+        SidebarItem {
+            icon: @image-url("../icons/folder-downloads.svg");
+            label: "Downloads";
+            expandable: true;
+        }
+
+        SidebarItem {
+            icon: @image-url("../icons/folder-documents.svg");
+            label: "Documents";
+            expandable: true;
+        }
+
+        SidebarItem {
+            icon: @image-url("../icons/folder-pictures.svg");
+            label: "Pictures";
+            expandable: true;
+        }
+
+        SidebarItem {
+            icon: @image-url("../icons/folder-music.svg");
+            label: "Music";
+            expandable: true;
+        }
+
+        SidebarItem {
+            icon: @image-url("../icons/folder-videos.svg");
+            label: "Videos";
+            expandable: true;
+        }
+
+        Rectangle {
+            height: 9px;
+
+            Rectangle {
+                y: 4px;
+                height: 1px;
+                background: #e1e4e8;
+            }
+        }
+
+        SidebarItem {
+            icon: @image-url("../icons/pc.svg");
+            label: "Folder Lab";
+            selected: true;
+        }
+
+        SidebarItem {
+            icon: @image-url("../icons/network.svg");
+            label: "Network";
+        }
+
+        Rectangle { }
+    }
+}
