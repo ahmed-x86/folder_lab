@@ -1,0 +1,23 @@
+[package]
+name = "folder-lab"
+version = "0.1.0"
+edition = "2021"
+description = "A small Windows 10 style Folder Lab window for Linux partitions"
+license = "MIT"
+
+[dependencies]
+slint = { version = "=1.18.1", default-features = false, features = ["std", "backend-winit", "renderer-femtovg", "renderer-software", "compat-1-2"] }
+libc = "0.2"
+
+[build-dependencies]
+slint-build = "=1.18.1"
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true
+
+# async-executor 1.14.0 is the only version available in the local cargo cache,
+# but its index entry is marked yanked. Patching it keeps offline builds working.
+[patch.crates-io]
+async-executor = { path = "vendor/async-executor-1.14.0" }
