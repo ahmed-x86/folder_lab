@@ -1,3 +1,4 @@
+import { Theme } from "../theme.slint";
 import { Glyph } from "../components/glyph.slint";
 import { DriveCard } from "../components/drive-card.slint";
 import { DiskInfo } from "../types.slint";
@@ -6,7 +7,7 @@ export component ContentPane inherits Rectangle {
     in property <[DiskInfo]> disks;
 
     horizontal-stretch: 1;
-    background: #ffffff;
+    background: Theme.bg;
 
     VerticalLayout {
         padding-left: 20px;
@@ -20,6 +21,7 @@ export component ContentPane inherits Rectangle {
 
             Glyph {
                 source: @image-url("../icons/chevron-down.svg");
+                tint: Theme.mono-tint;
                 icon-size: 10px;
                 faded: 0.65;
             }
@@ -28,7 +30,7 @@ export component ContentPane inherits Rectangle {
                 text: "Devices and drives";
                 font-size: 13px;
                 font-weight: 600;
-                color: #1f1f1f;
+                color: Theme.text;
                 vertical-alignment: center;
             }
         }
@@ -44,7 +46,7 @@ export component ContentPane inherits Rectangle {
         if root.disks.length == 0 : Text {
             text: "No mounted partitions were found.";
             font-size: 12px;
-            color: #777777;
+            color: Theme.text-muted;
         }
 
         Rectangle { }
