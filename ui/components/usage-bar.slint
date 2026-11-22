@@ -1,17 +1,18 @@
+import { Theme } from "../theme.slint";
 // Disk usage bar: the fill always starts at the left edge, inside the border.
 export component UsageBar inherits Rectangle {
     in property <float> used; // 0..100
 
     height: 10px;
-    background: #e6e6e6;
+    background: Theme.bar-track;
     border-width: 1px;
-    border-color: #bcbcbc;
+    border-color: Theme.bar-border;
 
     Rectangle {
         x: 1px;
         y: 1px;
         width: (root.width - 2px) * root.used / 100;
         height: root.height - 2px;
-        background: root.used >= 90 ? #da3b3b : #26a0da;
+        background: root.used >= 90 ? Theme.bar-full : Theme.bar-fill;
     }
 }
