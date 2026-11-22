@@ -1,3 +1,4 @@
+import { Theme } from "../theme.slint";
 import { Glyph } from "glyph.slint";
 
 export component RibbonSmall inherits Rectangle {
@@ -8,7 +9,7 @@ export component RibbonSmall inherits Rectangle {
     width: root.item-width;
     height: 20px;
     border-radius: 2px;
-    background: touch.has-hover ? #e5f3fb : transparent;
+    background: touch.has-hover ? Theme.hover : transparent;
 
     HorizontalLayout {
         padding-left: 4px;
@@ -23,7 +24,7 @@ export component RibbonSmall inherits Rectangle {
         Text {
             text: root.label;
             font-size: 11px;
-            color: #2b2b2b;
+            color: Theme.text;
             vertical-alignment: center;
             overflow: elide;
         }
