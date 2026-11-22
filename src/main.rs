@@ -17,6 +17,10 @@ impl From<ThemeChoice> for ThemePreference {
             ThemeChoice::System => Self::System,
             ThemeChoice::Light => Self::Light,
             ThemeChoice::Dark => Self::Dark,
+            ThemeChoice::Latte => Self::Latte,
+            ThemeChoice::Frappe => Self::Frappe,
+            ThemeChoice::Macchiato => Self::Macchiato,
+            ThemeChoice::Mocha => Self::Mocha,
         }
     }
 }
@@ -27,6 +31,10 @@ impl From<ThemePreference> for ThemeChoice {
             ThemePreference::System => Self::System,
             ThemePreference::Light => Self::Light,
             ThemePreference::Dark => Self::Dark,
+            ThemePreference::Latte => Self::Latte,
+            ThemePreference::Frappe => Self::Frappe,
+            ThemePreference::Macchiato => Self::Macchiato,
+            ThemePreference::Mocha => Self::Mocha,
         }
     }
 }
