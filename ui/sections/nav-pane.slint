@@ -1,8 +1,9 @@
+import { Theme } from "../theme.slint";
 import { SidebarItem } from "../components/sidebar-item.slint";
 
 export component NavPane inherits Rectangle {
     width: 200px;
-    background: #f7f8fa;
+    background: Theme.sidebar-bg;
 
     VerticalLayout {
         padding-top: 6px;
@@ -26,7 +27,7 @@ export component NavPane inherits Rectangle {
             Rectangle {
                 y: 4px;
                 height: 1px;
-                background: #e1e4e8;
+                background: Theme.separator;
             }
         }
 
@@ -72,7 +73,7 @@ export component NavPane inherits Rectangle {
             Rectangle {
                 y: 4px;
                 height: 1px;
-                background: #e1e4e8;
+                background: Theme.separator;
             }
         }
 
