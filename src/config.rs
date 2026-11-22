@@ -33,6 +33,10 @@ pub enum ThemeChoice {
     System,
     Light,
     Dark,
+    Latte,
+    Frappe,
+    Macchiato,
+    Mocha,
 }
 
 impl ThemeChoice {
@@ -42,6 +46,10 @@ impl ThemeChoice {
             Self::System => "system",
             Self::Light => "light",
             Self::Dark => "dark",
+            Self::Latte => "latte",
+            Self::Frappe => "frappe",
+            Self::Macchiato => "macchiato",
+            Self::Mocha => "mocha",
         }
     }
 }
@@ -52,7 +60,7 @@ pub struct UnknownTheme;
 
 impl fmt::Display for UnknownTheme {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("unknown theme (expected system, light or dark)")
+        f.write_str("unknown theme (expected system, light, dark, latte, frappe, macchiato or mocha)")
     }
 }
 
@@ -66,6 +74,10 @@ impl FromStr for ThemeChoice {
             "system" => Ok(Self::System),
             "light" => Ok(Self::Light),
             "dark" => Ok(Self::Dark),
+            "latte" => Ok(Self::Latte),
+            "frappe" | "frappé" => Ok(Self::Frappe),
+            "macchiato" => Ok(Self::Macchiato),
+            "mocha" => Ok(Self::Mocha),
             _ => Err(UnknownTheme),
         }
     }
@@ -183,7 +195,15 @@ mod tests {
 
     #[test]
     fn render_should_round_trip_through_parse() {
-        for theme in [ThemeChoice::System, ThemeChoice::Light, ThemeChoice::Dark] {
+        for theme in [
+            ThemeChoice::System,
+            ThemeChoice::Light,
+            ThemeChoice::Dark,
+            ThemeChoice::Latte,
+            ThemeChoice::Frappe,
+            ThemeChoice::Macchiato,
+            ThemeChoice::Mocha,
+        ] {
             let config = Config { theme };
             assert_eq!(Config::parse(&config.render()), config);
         }
