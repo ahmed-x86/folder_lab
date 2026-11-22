@@ -1,5 +1,4 @@
 import { Theme, ThemePreference } from "theme.slint";
-import { SettingsWindow } from "settings-window.slint";
 import { DiskInfo } from "types.slint";
 import { TabsBar } from "sections/tabs-bar.slint";
 import { Ribbon } from "sections/ribbon.slint";
@@ -8,8 +7,9 @@ import { NavPane } from "sections/nav-pane.slint";
 import { ContentPane } from "sections/content-pane.slint";
 import { StatusBar } from "sections/status-bar.slint";
 import { ThinSeparator } from "components/thin-separator.slint";
+import { SettingsPage } from "sections/settings-page.slint";
 
-export { DiskInfo, Theme, ThemePreference, SettingsWindow }
+export { DiskInfo, Theme, ThemePreference }
 
 export component AppWindow inherits Window {
     title: "Folder Lab";
@@ -24,11 +24,14 @@ export component AppWindow inherits Window {
 
     in property <[DiskInfo]> disks;
 
-    callback open-settings();
+    // "main" or "settings"
+    in-out property <bool> show-settings: false;
 
-    VerticalLayout {
+    callback theme-selected(ThemePreference);
+
+    if !root.show-settings : VerticalLayout {
         TabsBar {
-            settings-requested => { root.open-settings(); }
+            settings-requested => { root.show-settings = true; }
         }
         Ribbon { }
         ThinSeparator { }
@@ -54,5 +57,10 @@ export component AppWindow inherits Window {
         StatusBar {
             item-count: root.disks.length;
         }
+    }
+
+    if root.show-settings : SettingsPage {
+        go-back => { root.show-settings = false; }
+        theme-selected(pref) => { root.theme-selected(pref); }
     }
 }
