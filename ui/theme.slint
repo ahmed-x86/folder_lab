@@ -1,49 +1,193 @@
 import { Palette } from "std-widgets.slint";
 
-export enum ThemePreference { system, light, dark }
+export enum ThemePreference { system, light, dark, latte, frappe, macchiato, mocha }
 
 // Every color used by the UI lives here. `preference` is changed from the
-// Settings window; "system" follows the desktop light/dark setting live.
+// Settings page; "system" follows the desktop light/dark setting live.
 export global Theme {
     in-out property <ThemePreference> preference: ThemePreference.system;
 
+    // Resolve "system" to light/dark, everything else is a concrete theme.
     out property <bool> dark:
         preference == ThemePreference.dark ? true
         : preference == ThemePreference.light ? false
+        : preference == ThemePreference.latte ? false
+        : preference == ThemePreference.frappe ? true
+        : preference == ThemePreference.macchiato ? true
+        : preference == ThemePreference.mocha ? true
         : Palette.color-scheme == ColorScheme.dark;
 
-    // surfaces
-    out property <brush> bg: dark ? #1f1f1f : #ffffff;
-    out property <brush> tabs-bg: dark ? #2b2b2b : #f2f2f2;
-    out property <brush> ribbon-bg: dark ? #262626 : #fbfbfb;
-    out property <brush> sidebar-bg: dark ? #232323 : #f7f8fa;
-    out property <brush> status-bg: dark ? #2b2b2b : #f5f5f5;
-    out property <brush> field-bg: dark ? #2a2a2a : #ffffff;
-    out property <brush> menu-bg: dark ? #2b2b2b : #ffffff;
+    // Helper booleans for Catppuccin flavors
+    out property <bool> is-latte:    preference == ThemePreference.latte;
+    out property <bool> is-frappe:   preference == ThemePreference.frappe;
+    out property <bool> is-macchiato: preference == ThemePreference.macchiato;
+    out property <bool> is-mocha:    preference == ThemePreference.mocha;
+    out property <bool> is-catppuccin: is-latte || is-frappe || is-macchiato || is-mocha;
 
-    // lines
-    out property <brush> separator: dark ? #3a3a3a : #e3e3e3;
-    out property <brush> field-border: dark ? #4a4a4a : #d6d6d6;
+    // ── surfaces ──
+    out property <brush> bg:
+        is-latte ? #eff1f5
+        : is-frappe ? #303446
+        : is-macchiato ? #24273a
+        : is-mocha ? #1e1e2e
+        : dark ? #1f1f1f : #ffffff;
 
-    // text
-    out property <brush> text: dark ? #e6e6e6 : #1f1f1f;
-    out property <brush> text-secondary: dark ? #b5b5b5 : #4a4a4a;
-    out property <brush> text-muted: dark ? #8f8f8f : #777777;
+    out property <brush> tabs-bg:
+        is-latte ? #e6e9ef
+        : is-frappe ? #292c3c
+        : is-macchiato ? #1e2030
+        : is-mocha ? #181825
+        : dark ? #2b2b2b : #f2f2f2;
 
-    // interaction
-    out property <brush> hover: dark ? #2f3d4a : #e5f3fb;
-    out property <brush> hover-soft: dark ? #2a3036 : #eef4f9;
-    out property <brush> card-hover: dark ? #2b3641 : #eaf5fd;
-    out property <brush> hover-border: dark ? #3f6180 : #aedaf3;
-    out property <brush> selected: dark ? #26384a : #e5f1fb;
-    out property <brush> accent: dark ? #3b9eef : #0078d7;
+    out property <brush> ribbon-bg:
+        is-latte ? #dce0e8
+        : is-frappe ? #232634
+        : is-macchiato ? #181926
+        : is-mocha ? #11111b
+        : dark ? #262626 : #fbfbfb;
 
-    // usage bar
-    out property <brush> bar-track: dark ? #3a3a3a : #e6e6e6;
-    out property <brush> bar-border: dark ? #5a5a5a : #bcbcbc;
-    out property <brush> bar-fill: #26a0da;
-    out property <brush> bar-full: #da3b3b;
+    out property <brush> sidebar-bg:
+        is-latte ? #e6e9ef
+        : is-frappe ? #292c3c
+        : is-macchiato ? #1e2030
+        : is-mocha ? #181825
+        : dark ? #232323 : #f7f8fa;
+
+    out property <brush> status-bg:
+        is-latte ? #e6e9ef
+        : is-frappe ? #292c3c
+        : is-macchiato ? #1e2030
+        : is-mocha ? #181825
+        : dark ? #2b2b2b : #f5f5f5;
+
+    out property <brush> field-bg:
+        is-latte ? #ccd0da
+        : is-frappe ? #414559
+        : is-macchiato ? #363a4f
+        : is-mocha ? #313244
+        : dark ? #2a2a2a : #ffffff;
+
+    out property <brush> menu-bg:
+        is-latte ? #eff1f5
+        : is-frappe ? #303446
+        : is-macchiato ? #24273a
+        : is-mocha ? #1e1e2e
+        : dark ? #2b2b2b : #ffffff;
+
+    // ── lines ──
+    out property <brush> separator:
+        is-latte ? #bcc0cc
+        : is-frappe ? #51576d
+        : is-macchiato ? #494d64
+        : is-mocha ? #45475a
+        : dark ? #3a3a3a : #e3e3e3;
+
+    out property <brush> field-border:
+        is-latte ? #acb0be
+        : is-frappe ? #626880
+        : is-macchiato ? #5b6078
+        : is-mocha ? #585b70
+        : dark ? #4a4a4a : #d6d6d6;
+
+    // ── text ──
+    out property <brush> text:
+        is-latte ? #4c4f69
+        : is-frappe ? #c6d0f5
+        : is-macchiato ? #cad3f5
+        : is-mocha ? #cdd6f4
+        : dark ? #e6e6e6 : #1f1f1f;
+
+    out property <brush> text-secondary:
+        is-latte ? #5c5f77
+        : is-frappe ? #b5bfe2
+        : is-macchiato ? #b8c0e0
+        : is-mocha ? #bac2de
+        : dark ? #b5b5b5 : #4a4a4a;
+
+    out property <brush> text-muted:
+        is-latte ? #8c8fa1
+        : is-frappe ? #838ba7
+        : is-macchiato ? #8087a2
+        : is-mocha ? #7f849c
+        : dark ? #8f8f8f : #777777;
+
+    // ── interaction ──
+    out property <brush> hover:
+        is-latte ? #bcc0cc
+        : is-frappe ? #51576d
+        : is-macchiato ? #494d64
+        : is-mocha ? #45475a
+        : dark ? #2f3d4a : #e5f3fb;
+
+    out property <brush> hover-soft:
+        is-latte ? #ccd0da
+        : is-frappe ? #414559
+        : is-macchiato ? #363a4f
+        : is-mocha ? #313244
+        : dark ? #2a3036 : #eef4f9;
+
+    out property <brush> card-hover:
+        is-latte ? #bcc0cc
+        : is-frappe ? #51576d
+        : is-macchiato ? #494d64
+        : is-mocha ? #45475a
+        : dark ? #2b3641 : #eaf5fd;
+
+    out property <brush> hover-border:
+        is-latte ? #1e66f5
+        : is-frappe ? #8caaee
+        : is-macchiato ? #8aadf4
+        : is-mocha ? #89b4fa
+        : dark ? #3f6180 : #aedaf3;
+
+    out property <brush> selected:
+        is-latte ? #bcc0cc
+        : is-frappe ? #51576d
+        : is-macchiato ? #494d64
+        : is-mocha ? #45475a
+        : dark ? #26384a : #e5f1fb;
+
+    out property <brush> accent:
+        is-latte ? #1e66f5
+        : is-frappe ? #8caaee
+        : is-macchiato ? #8aadf4
+        : is-mocha ? #89b4fa
+        : dark ? #3b9eef : #0078d7;
+
+    // ── usage bar ──
+    out property <brush> bar-track:
+        is-latte ? #acb0be
+        : is-frappe ? #626880
+        : is-macchiato ? #5b6078
+        : is-mocha ? #585b70
+        : dark ? #3a3a3a : #e6e6e6;
+
+    out property <brush> bar-border:
+        is-latte ? #9ca0b0
+        : is-frappe ? #737994
+        : is-macchiato ? #6e738d
+        : is-mocha ? #6c7086
+        : dark ? #5a5a5a : #bcbcbc;
+
+    out property <brush> bar-fill:
+        is-latte ? #1e66f5
+        : is-frappe ? #8caaee
+        : is-macchiato ? #8aadf4
+        : is-mocha ? #89b4fa
+        : #26a0da;
+
+    out property <brush> bar-full:
+        is-latte ? #d20f39
+        : is-frappe ? #e78284
+        : is-macchiato ? #ed8796
+        : is-mocha ? #f38ba8
+        : #da3b3b;
 
     // dark monochrome icons (arrows, chevrons, search...) are repainted light
-    out property <brush> mono-tint: dark ? #d0d0d0 : transparent;
+    out property <brush> mono-tint:
+        is-latte ? transparent
+        : is-frappe ? #c6d0f5
+        : is-macchiato ? #cad3f5
+        : is-mocha ? #cdd6f4
+        : dark ? #d0d0d0 : transparent;
 }
