@@ -1,11 +1,35 @@
 slint::include_modules!();
 
+mod config;
+
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::fs;
 use std::path::Path;
 
 use slint::{ComponentHandle, ModelRc, VecModel};
+
+use crate::config::{Config, ThemeChoice};
+
+impl From<ThemeChoice> for ThemePreference {
+    fn from(choice: ThemeChoice) -> Self {
+        match choice {
+            ThemeChoice::System => Self::System,
+            ThemeChoice::Light => Self::Light,
+            ThemeChoice::Dark => Self::Dark,
+        }
+    }
+}
+
+impl From<ThemePreference> for ThemeChoice {
+    fn from(preference: ThemePreference) -> Self {
+        match preference {
+            ThemePreference::System => Self::System,
+            ThemePreference::Light => Self::Light,
+            ThemePreference::Dark => Self::Dark,
+        }
+    }
+}
 
 /// Filesystems that represent a real, user-visible partition.
 const REAL_FILESYSTEMS: &[&str] = &[
@@ -224,6 +248,45 @@ fn collect_disks() -> Vec<DiskInfo> {
 fn main() -> Result<(), slint::PlatformError> {
     let ui = AppWindow::new()?;
     ui.set_disks(ModelRc::new(VecModel::from(collect_disks())));
+
+    // Restore the theme saved by the previous run.
+    let saved_theme = ThemePreference::from(Config::load().theme);
+    ui.global::<Theme>().set_preference(saved_theme);
+
+    // Settings window: picking a theme there is applied to the main window
+    // and remembered for the next run.
+    let settings = SettingsWindow::new()?;
+    settings.global::<Theme>().set_preference(saved_theme);
+
+    let main_weak = ui.as_weak();
+    settings.on_theme_selected(move |preference| {
+        if let Some(main) = main_weak.upgrade() {
+            main.global::<Theme>().set_preference(preference);
+        }
+
+        let config = Config {
+            theme: ThemeChoice::from(preference),
+        };
+        if let Err(err) = config.save() {
+            eprintln!("folder-lab: could not save settings: {err}");
+        }
+    });
+
+    let settings_weak = settings.as_weak();
+    ui.on_open_settings(move || {
+        if let Some(settings) = settings_weak.upgrade() {
+            settings.show().ok();
+        }
+    });
+
+    // Closing the main window also closes Settings, so the app really exits.
+    let settings_weak = settings.as_weak();
+    ui.window().on_close_requested(move || {
+        if let Some(settings) = settings_weak.upgrade() {
+            settings.hide().ok();
+        }
+        slint::CloseRequestResponse::HideWindow
+    });
 
     ui.run()
 }
