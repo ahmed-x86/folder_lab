@@ -1,3 +1,4 @@
+import { Theme } from "../theme.slint";
 import { Glyph } from "glyph.slint";
 import { UsageBar } from "usage-bar.slint";
 import { DiskInfo } from "../types.slint";
@@ -8,9 +9,9 @@ export component DriveCard inherits Rectangle {
     width: 250px;
     height: 80px;
     border-radius: 3px;
-    background: touch.has-hover ? #eaf5fd : transparent;
+    background: touch.has-hover ? Theme.card-hover : transparent;
     border-width: 1px;
-    border-color: touch.has-hover ? #b7dcf5 : transparent;
+    border-color: touch.has-hover ? Theme.hover-border : transparent;
 
     HorizontalLayout {
         padding: 8px;
@@ -30,7 +31,7 @@ export component DriveCard inherits Rectangle {
                 text: root.disk.title;
                 font-size: 12px;
                 font-weight: 600;
-                color: #1a1a1a;
+                color: Theme.text;
                 overflow: elide;
             }
 
@@ -41,7 +42,7 @@ export component DriveCard inherits Rectangle {
             Text {
                 text: root.disk.free;
                 font-size: 11px;
-                color: #3c3c3c;
+                color: Theme.text-secondary;
                 overflow: elide;
             }
         }
