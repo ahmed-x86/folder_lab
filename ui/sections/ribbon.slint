@@ -1,9 +1,10 @@
+import { Theme } from "../theme.slint";
 import { RibbonBig } from "../components/ribbon-big.slint";
 import { RibbonSmall } from "../components/ribbon-small.slint";
 
 export component Ribbon inherits Rectangle {
     height: 84px;
-    background: #fbfbfb;
+    background: Theme.ribbon-bg;
 
     HorizontalLayout {
         padding-left: 6px;
@@ -46,7 +47,7 @@ export component Ribbon inherits Rectangle {
             Text {
                 text: "Clipboard";
                 font-size: 9px;
-                color: #777777;
+                color: Theme.text-muted;
                 horizontal-alignment: center;
             }
         }
@@ -57,7 +58,7 @@ export component Ribbon inherits Rectangle {
 
         Rectangle {
             width: 1px;
-            background: #e2e2e2;
+            background: Theme.separator;
         }
 
         Rectangle {
@@ -118,7 +119,7 @@ export component Ribbon inherits Rectangle {
             Text {
                 text: "Organize";
                 font-size: 9px;
-                color: #777777;
+                color: Theme.text-muted;
                 horizontal-alignment: center;
             }
         }
@@ -129,7 +130,7 @@ export component Ribbon inherits Rectangle {
 
         Rectangle {
             width: 1px;
-            background: #e2e2e2;
+            background: Theme.separator;
         }
 
         Rectangle {
@@ -168,7 +169,7 @@ export component Ribbon inherits Rectangle {
             Text {
                 text: "Select";
                 font-size: 9px;
-                color: #777777;
+                color: Theme.text-muted;
                 horizontal-alignment: center;
             }
         }
