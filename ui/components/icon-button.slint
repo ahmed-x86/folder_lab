@@ -1,3 +1,4 @@
+import { Theme } from "../theme.slint";
 export component IconButton inherits Rectangle {
     in property <image> icon;
     in property <bool> enabled: true;
@@ -5,7 +6,7 @@ export component IconButton inherits Rectangle {
     width: 26px;
     height: 26px;
     border-radius: 2px;
-    background: touch.has-hover && root.enabled ? #e5f3fb : transparent;
+    background: touch.has-hover && root.enabled ? Theme.hover : transparent;
     opacity: root.enabled ? 1.0 : 0.38;
 
     Image {
@@ -13,6 +14,7 @@ export component IconButton inherits Rectangle {
         width: 16px;
         height: 16px;
         image-fit: ImageFit.contain;
+        colorize: Theme.mono-tint;
     }
 
     touch := TouchArea {
