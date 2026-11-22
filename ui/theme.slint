@@ -1,0 +1,49 @@
+import { Palette } from "std-widgets.slint";
+
+export enum ThemePreference { system, light, dark }
+
+// Every color used by the UI lives here. `preference` is changed from the
+// Settings window; "system" follows the desktop light/dark setting live.
+export global Theme {
+    in-out property <ThemePreference> preference: ThemePreference.system;
+
+    out property <bool> dark:
+        preference == ThemePreference.dark ? true
+        : preference == ThemePreference.light ? false
+        : Palette.color-scheme == ColorScheme.dark;
+
+    // surfaces
+    out property <brush> bg: dark ? #1f1f1f : #ffffff;
+    out property <brush> tabs-bg: dark ? #2b2b2b : #f2f2f2;
+    out property <brush> ribbon-bg: dark ? #262626 : #fbfbfb;
+    out property <brush> sidebar-bg: dark ? #232323 : #f7f8fa;
+    out property <brush> status-bg: dark ? #2b2b2b : #f5f5f5;
+    out property <brush> field-bg: dark ? #2a2a2a : #ffffff;
+    out property <brush> menu-bg: dark ? #2b2b2b : #ffffff;
+
+    // lines
+    out property <brush> separator: dark ? #3a3a3a : #e3e3e3;
+    out property <brush> field-border: dark ? #4a4a4a : #d6d6d6;
+
+    // text
+    out property <brush> text: dark ? #e6e6e6 : #1f1f1f;
+    out property <brush> text-secondary: dark ? #b5b5b5 : #4a4a4a;
+    out property <brush> text-muted: dark ? #8f8f8f : #777777;
+
+    // interaction
+    out property <brush> hover: dark ? #2f3d4a : #e5f3fb;
+    out property <brush> hover-soft: dark ? #2a3036 : #eef4f9;
+    out property <brush> card-hover: dark ? #2b3641 : #eaf5fd;
+    out property <brush> hover-border: dark ? #3f6180 : #aedaf3;
+    out property <brush> selected: dark ? #26384a : #e5f1fb;
+    out property <brush> accent: dark ? #3b9eef : #0078d7;
+
+    // usage bar
+    out property <brush> bar-track: dark ? #3a3a3a : #e6e6e6;
+    out property <brush> bar-border: dark ? #5a5a5a : #bcbcbc;
+    out property <brush> bar-fill: #26a0da;
+    out property <brush> bar-full: #da3b3b;
+
+    // dark monochrome icons (arrows, chevrons, search...) are repainted light
+    out property <brush> mono-tint: dark ? #d0d0d0 : transparent;
+}
