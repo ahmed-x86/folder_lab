@@ -253,39 +253,14 @@ fn main() -> Result<(), slint::PlatformError> {
     let saved_theme = ThemePreference::from(Config::load().theme);
     ui.global::<Theme>().set_preference(saved_theme);
 
-    // Settings window: picking a theme there is applied to the main window
-    // and remembered for the next run.
-    let settings = SettingsWindow::new()?;
-    settings.global::<Theme>().set_preference(saved_theme);
-
-    let main_weak = ui.as_weak();
-    settings.on_theme_selected(move |preference| {
-        if let Some(main) = main_weak.upgrade() {
-            main.global::<Theme>().set_preference(preference);
-        }
-
+    // Settings page: picking a theme is applied and remembered for the next run.
+    ui.on_theme_selected(move |preference| {
         let config = Config {
             theme: ThemeChoice::from(preference),
         };
         if let Err(err) = config.save() {
             eprintln!("folder-lab: could not save settings: {err}");
         }
-    });
-
-    let settings_weak = settings.as_weak();
-    ui.on_open_settings(move || {
-        if let Some(settings) = settings_weak.upgrade() {
-            settings.show().ok();
-        }
-    });
-
-    // Closing the main window also closes Settings, so the app really exits.
-    let settings_weak = settings.as_weak();
-    ui.window().on_close_requested(move || {
-        if let Some(settings) = settings_weak.upgrade() {
-            settings.hide().ok();
-        }
-        slint::CloseRequestResponse::HideWindow
     });
 
     ui.run()
