@@ -1,3 +1,4 @@
+import { Theme } from "../theme.slint";
 export component RibbonBig inherits Rectangle {
     in property <image> icon;
     in property <string> label;
@@ -5,9 +6,9 @@ export component RibbonBig inherits Rectangle {
     width: 56px;
     height: 60px;
     border-radius: 3px;
-    background: touch.has-hover ? #e5f3fb : transparent;
+    background: touch.has-hover ? Theme.hover : transparent;
     border-width: touch.has-hover ? 1px : 0px;
-    border-color: #a9d7f2;
+    border-color: Theme.hover-border;
 
     VerticalLayout {
         alignment: center;
@@ -26,7 +27,7 @@ export component RibbonBig inherits Rectangle {
         Text {
             text: root.label;
             font-size: 10px;
-            color: #2b2b2b;
+            color: Theme.text;
             horizontal-alignment: center;
             overflow: elide;
         }
