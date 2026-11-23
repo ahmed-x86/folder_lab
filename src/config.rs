@@ -37,6 +37,26 @@ pub enum ThemeChoice {
     Frappe,
     Macchiato,
     Mocha,
+    WhiteDark,
+    BlackLight,
+    BlueAccent,
+    ButterCream,
+    MintCream,
+    OliveGrove,
+    VioletGrid,
+    VioletNight,
+    Android13,
+    Nord,
+    Dracula,
+    Gruvbox,
+    TokyoNight,
+    Rose,
+    AmoledBlack,
+    OceanTeal,
+    Sunset,
+    Forest,
+    Sakura,
+    Custom,
 }
 
 impl ThemeChoice {
@@ -50,6 +70,26 @@ impl ThemeChoice {
             Self::Frappe => "frappe",
             Self::Macchiato => "macchiato",
             Self::Mocha => "mocha",
+            Self::WhiteDark => "white-dark",
+            Self::BlackLight => "black-light",
+            Self::BlueAccent => "blue-accent",
+            Self::ButterCream => "butter-cream",
+            Self::MintCream => "mint-cream",
+            Self::OliveGrove => "olive-grove",
+            Self::VioletGrid => "violet-grid",
+            Self::VioletNight => "violet-night",
+            Self::Android13 => "android13",
+            Self::Nord => "nord",
+            Self::Dracula => "dracula",
+            Self::Gruvbox => "gruvbox",
+            Self::TokyoNight => "tokyo-night",
+            Self::Rose => "rose",
+            Self::AmoledBlack => "amoled-black",
+            Self::OceanTeal => "ocean-teal",
+            Self::Sunset => "sunset",
+            Self::Forest => "forest",
+            Self::Sakura => "sakura",
+            Self::Custom => "custom",
         }
     }
 }
@@ -60,7 +100,7 @@ pub struct UnknownTheme;
 
 impl fmt::Display for UnknownTheme {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("unknown theme (expected system, light, dark, latte, frappe, macchiato or mocha)")
+        f.write_str("unknown theme name")
     }
 }
 
@@ -78,15 +118,101 @@ impl FromStr for ThemeChoice {
             "frappe" | "frappé" => Ok(Self::Frappe),
             "macchiato" => Ok(Self::Macchiato),
             "mocha" => Ok(Self::Mocha),
+            "white-dark" => Ok(Self::WhiteDark),
+            "black-light" => Ok(Self::BlackLight),
+            "blue-accent" => Ok(Self::BlueAccent),
+            "butter-cream" => Ok(Self::ButterCream),
+            "mint-cream" => Ok(Self::MintCream),
+            "olive-grove" => Ok(Self::OliveGrove),
+            "violet-grid" => Ok(Self::VioletGrid),
+            "violet-night" => Ok(Self::VioletNight),
+            "android13" => Ok(Self::Android13),
+            "nord" => Ok(Self::Nord),
+            "dracula" => Ok(Self::Dracula),
+            "gruvbox" => Ok(Self::Gruvbox),
+            "tokyo-night" => Ok(Self::TokyoNight),
+            "rose" => Ok(Self::Rose),
+            "amoled-black" => Ok(Self::AmoledBlack),
+            "ocean-teal" => Ok(Self::OceanTeal),
+            "sunset" => Ok(Self::Sunset),
+            "forest" => Ok(Self::Forest),
+            "sakura" => Ok(Self::Sakura),
+            "custom" => Ok(Self::Custom),
             _ => Err(UnknownTheme),
         }
     }
 }
 
+/// The colours of the "Custom colours" preset, stored as hex text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CustomColors {
+    pub bg: String,
+    pub sidebar: String,
+    pub ribbon: String,
+    pub field: String,
+    pub accent: String,
+    pub text: String,
+    pub text_secondary: String,
+    pub border: String,
+    pub icon_tint: String,
+}
+
+impl Default for CustomColors {
+    fn default() -> Self {
+        Self {
+            bg: "#1e1e2e".into(),
+            sidebar: "#181825".into(),
+            ribbon: "#11111b".into(),
+            field: "#313244".into(),
+            accent: "#cba6f7".into(),
+            text: "#cdd6f4".into(),
+            text_secondary: "#bac2de".into(),
+            border: "#585b70".into(),
+            icon_tint: "#cdd6f4".into(),
+        }
+    }
+}
+
+impl CustomColors {
+    /// `settings.conf` key for each colour, in a stable order.
+    pub fn pairs(&self) -> [(&'static str, &str); 9] {
+        [
+            ("custom-bg", &self.bg),
+            ("custom-sidebar", &self.sidebar),
+            ("custom-ribbon", &self.ribbon),
+            ("custom-field", &self.field),
+            ("custom-accent", &self.accent),
+            ("custom-text", &self.text),
+            ("custom-text-secondary", &self.text_secondary),
+            ("custom-border", &self.border),
+            ("custom-icon", &self.icon_tint),
+        ]
+    }
+
+    fn set(&mut self, key: &str, value: &str) -> bool {
+        let value = value.trim();
+        let slot = match key {
+            "custom-bg" => &mut self.bg,
+            "custom-sidebar" => &mut self.sidebar,
+            "custom-ribbon" => &mut self.ribbon,
+            "custom-field" => &mut self.field,
+            "custom-accent" => &mut self.accent,
+            "custom-text" => &mut self.text,
+            "custom-text-secondary" => &mut self.text_secondary,
+            "custom-border" => &mut self.border,
+            "custom-icon" => &mut self.icon_tint,
+            _ => return false,
+        };
+        *slot = value.to_string();
+        true
+    }
+}
+
 /// Everything the app remembers between runs.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Config {
     pub theme: ThemeChoice,
+    pub custom: CustomColors,
 }
 
 impl Config {
@@ -139,10 +265,13 @@ impl Config {
                 continue;
             };
 
-            if key.trim() == "theme" {
+            let key = key.trim();
+            if key == "theme" {
                 if let Ok(theme) = value.parse() {
                     config.theme = theme;
                 }
+            } else {
+                config.custom.set(key, value);
             }
         }
 
@@ -150,7 +279,11 @@ impl Config {
     }
 
     fn render(&self) -> String {
-        format!("# Folder Lab settings\ntheme = {}\n", self.theme.as_str())
+        let mut text = format!("# Folder Lab settings\ntheme = {}\n", self.theme.as_str());
+        for (key, value) in self.custom.pairs() {
+            text.push_str(&format!("{key} = {value}\n"));
+        }
+        text
     }
 }
 
@@ -203,9 +336,45 @@ mod tests {
             ThemeChoice::Frappe,
             ThemeChoice::Macchiato,
             ThemeChoice::Mocha,
+            ThemeChoice::WhiteDark,
+            ThemeChoice::BlackLight,
+            ThemeChoice::BlueAccent,
+            ThemeChoice::ButterCream,
+            ThemeChoice::MintCream,
+            ThemeChoice::OliveGrove,
+            ThemeChoice::VioletGrid,
+            ThemeChoice::VioletNight,
+            ThemeChoice::Android13,
+            ThemeChoice::Nord,
+            ThemeChoice::Dracula,
+            ThemeChoice::Gruvbox,
+            ThemeChoice::TokyoNight,
+            ThemeChoice::Rose,
+            ThemeChoice::AmoledBlack,
+            ThemeChoice::OceanTeal,
+            ThemeChoice::Sunset,
+            ThemeChoice::Forest,
+            ThemeChoice::Sakura,
+            ThemeChoice::Custom,
         ] {
-            let config = Config { theme };
+            let config = Config {
+                theme,
+                ..Default::default()
+            };
             assert_eq!(Config::parse(&config.render()), config);
         }
+    }
+
+    #[test]
+    fn render_should_round_trip_custom_colours() {
+        let config = Config {
+            theme: ThemeChoice::Custom,
+            custom: CustomColors {
+                bg: "#101010".into(),
+                accent: "#ff00aa".into(),
+                ..Default::default()
+            },
+        };
+        assert_eq!(Config::parse(&config.render()), config);
     }
 }
