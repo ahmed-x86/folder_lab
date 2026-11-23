@@ -1,15 +1,20 @@
 slint::include_modules!();
 
 mod config;
+mod fs_ops;
+mod nav;
 
-use std::collections::HashMap;
-use std::ffi::CString;
+use std::cell::RefCell;
+use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
 use slint::{Color, ComponentHandle, Model, ModelRc, SharedString, VecModel};
 
 use crate::config::{Config, CustomColors, ThemeChoice};
+use crate::fs_ops::{collect_disks, get_file_details, read_directory, sort_entries};
+use crate::nav::{NavState, NavTarget};
 
 impl From<ThemeChoice> for ThemePreference {
     fn from(choice: ThemeChoice) -> Self {
@@ -79,272 +84,6 @@ impl From<ThemePreference> for ThemeChoice {
     }
 }
 
-/// Filesystems that represent a real, user-visible partition.
-const REAL_FILESYSTEMS: &[&str] = &[
-    "ext2", "ext3", "ext4", "btrfs", "xfs", "vfat", "exfat", "ntfs", "ntfs3", "f2fs", "jfs",
-    "reiserfs", "bcachefs", "zfs", "fuseblk",
-];
-
-#[derive(Debug, Clone)]
-struct MountEntry {
-    device: String,
-    mount: String,
-    fstype: String,
-}
-
-fn decode_mount_field(value: &str) -> String {
-    // /proc/self/mounts escapes spaces, tabs, newlines and backslashes as \ooo.
-    let mut out = String::with_capacity(value.len());
-    let bytes = value.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'\\' && i + 3 < bytes.len() {
-            let octal = &value[i + 1..i + 4];
-            if let Ok(byte) = u8::from_str_radix(octal, 8) {
-                out.push(byte as char);
-                i += 4;
-                continue;
-            }
-        }
-        out.push(bytes[i] as char);
-        i += 1;
-    }
-    out
-}
-
-fn decode_label(value: &str) -> String {
-    value
-        .replace("\\x20", " ")
-        .replace("\\x09", "\t")
-        .replace("\\x0a", "\n")
-        .replace("\\x5c", "\\")
-}
-
-fn read_mounts() -> Vec<MountEntry> {
-    let Ok(contents) = fs::read_to_string("/proc/self/mounts") else {
-        return Vec::new();
-    };
-
-    contents
-        .lines()
-        .filter_map(|line| {
-            let mut fields = line.split_whitespace();
-            let device = decode_mount_field(fields.next()?);
-            let mount = decode_mount_field(fields.next()?);
-            let fstype = fields.next()?.to_string();
-
-            if !device.starts_with("/dev/") {
-                return None;
-            }
-            if device.starts_with("/dev/loop") || device.starts_with("/dev/zram") {
-                return None;
-            }
-            if !REAL_FILESYSTEMS.contains(&fstype.as_str()) {
-                return None;
-            }
-
-            Some(MountEntry {
-                device,
-                mount,
-                fstype,
-            })
-        })
-        .collect()
-}
-
-/// A btrfs disk can be mounted at several places (/, /home, /var, ...).
-/// Keep one card per device, preferring the root mount.
-fn one_per_device(entries: Vec<MountEntry>) -> Vec<MountEntry> {
-    let mut by_device: HashMap<String, Vec<MountEntry>> = HashMap::new();
-    for entry in entries {
-        by_device.entry(entry.device.clone()).or_default().push(entry);
-    }
-
-    let mut result: Vec<MountEntry> = by_device
-        .into_values()
-        .filter_map(|mounts| mounts.into_iter().min_by_key(|m| mount_rank(&m.mount)))
-        .collect();
-
-    result.sort_by(|a, b| {
-        mount_rank(&a.mount)
-            .cmp(&mount_rank(&b.mount))
-            .then_with(|| a.device.cmp(&b.device))
-    });
-    result
-}
-
-fn mount_rank(mount: &str) -> (u8, usize, usize) {
-    match mount {
-        "/" => (0, 0, 0),
-        "/boot" => (1, 0, 0),
-        _ => (2, mount.matches('/').count(), mount.len()),
-    }
-}
-
-fn filesystem_labels() -> HashMap<String, String> {
-    let mut labels = HashMap::new();
-
-    for directory in ["/dev/disk/by-label", "/dev/disk/by-partlabel"] {
-        let Ok(entries) = fs::read_dir(directory) else {
-            continue;
-        };
-
-        for entry in entries.flatten() {
-            let Some(name) = entry.file_name().to_str().map(decode_label) else {
-                continue;
-            };
-            let Ok(target) = fs::canonicalize(entry.path()) else {
-                continue;
-            };
-            labels
-                .entry(target.to_string_lossy().into_owned())
-                .or_insert(name);
-        }
-    }
-
-    labels
-}
-
-fn disk_space(mount: &str) -> Option<(u64, u64)> {
-    let path = CString::new(mount).ok()?;
-    let mut stats: libc::statvfs = unsafe { std::mem::zeroed() };
-
-    if unsafe { libc::statvfs(path.as_ptr(), &mut stats) } != 0 {
-        return None;
-    }
-
-    let block_size = stats.f_frsize as u64;
-    let total = stats.f_blocks as u64 * block_size;
-    let free = stats.f_bavail as u64 * block_size;
-    Some((total, free))
-}
-
-fn pretty_mount_name(mount: &str) -> String {
-    match mount {
-        "/" => "OS".to_string(),
-        "/boot" => "Boot".to_string(),
-        "/home" => "Home".to_string(),
-        "/var" => "Var".to_string(),
-        _ => {
-            let last = mount
-                .trim_end_matches('/')
-                .rsplit('/')
-                .next()
-                .unwrap_or("Disk");
-            let mut chars = last.chars();
-            match chars.next() {
-                Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
-                None => "Disk".to_string(),
-            }
-        }
-    }
-}
-
-fn format_size(bytes: u64) -> String {
-    const MIB: f64 = 1024.0 * 1024.0;
-    const GIB: f64 = 1024.0 * 1024.0 * 1024.0;
-
-    let gib = bytes as f64 / GIB;
-    if gib >= 1.0 {
-        let value = format!("{gib:.1}");
-        format!("{} GB", value.trim_end_matches(".0"))
-    } else {
-        format!("{:.0} MB", bytes as f64 / MIB)
-    }
-}
-
-fn short_device(device: &str) -> &str {
-    device.rsplit('/').next().unwrap_or(device)
-}
-
-fn collect_disks() -> Vec<DiskInfo> {
-    let labels = filesystem_labels();
-
-    one_per_device(read_mounts())
-        .into_iter()
-        .filter_map(|entry| {
-            let (total, free) = disk_space(&entry.mount)?;
-            if total == 0 {
-                return None;
-            }
-
-            let used = ((total.saturating_sub(free)) as f64 / total as f64 * 100.0)
-                .clamp(0.0, 100.0) as f32;
-
-            let label = labels.get(&entry.device).cloned().or_else(|| {
-                fs::canonicalize(Path::new(&entry.device))
-                    .ok()
-                    .and_then(|path| labels.get(&path.to_string_lossy().into_owned()).cloned())
-            });
-
-            let name = label.unwrap_or_else(|| pretty_mount_name(&entry.mount));
-            let title = format!("{} ({})", name, short_device(&entry.device));
-
-            Some(DiskInfo {
-                title: title.into(),
-                device: entry.device.into(),
-                mount: entry.mount.into(),
-                fs: entry.fstype.into(),
-                total: format_size(total).into(),
-                free: format!("{} free of {}", format_size(free), format_size(total)).into(),
-                used,
-            })
-        })
-        .collect()
-}
-
-/// Read a directory and return (state, entries).
-/// If `path` is relative, it is resolved against `current_path`.
-fn read_directory(path: &Path) -> (BrowseState, Vec<FileEntry>) {
-    // Try to read the directory
-    let read_result = fs::read_dir(path);
-
-    match read_result {
-        Err(e) => {
-            use std::io::ErrorKind;
-            match e.kind() {
-                ErrorKind::PermissionDenied => (BrowseState::NoPermission, vec![]),
-                _ => (BrowseState::NoPermission, vec![]),
-            }
-        }
-        Ok(iter) => {
-            let mut entries: Vec<FileEntry> = iter
-                .filter_map(|e| e.ok())
-                .filter_map(|e| {
-                    let name = e.file_name().to_string_lossy().into_owned();
-                    // Skip hidden files (starting with .)
-                    // Uncomment the next line if you want to show hidden files:
-                    // let _ = ();
-                    let meta = e.metadata().ok()?;
-                    let is_dir = meta.is_dir();
-                    let size = if is_dir {
-                        String::new()
-                    } else {
-                        format_size(meta.len())
-                    };
-                    Some(FileEntry {
-                        name: name.into(),
-                        is_dir,
-                        size: size.into(),
-                    })
-                })
-                .collect();
-
-            if entries.is_empty() {
-                (BrowseState::Empty, vec![])
-            } else {
-                // Sort: directories first, then files, both alphabetically
-                entries.sort_by(|a, b| {
-                    b.is_dir
-                        .cmp(&a.is_dir)
-                        .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
-                });
-                (BrowseState::Directory, entries)
-            }
-        }
-    }
-}
-
 /// Parse the hex colours typed on the Settings → Theme page.
 fn parse_hex(value: &str) -> Option<Color> {
     let digits = value.trim().trim_start_matches('#');
@@ -378,8 +117,6 @@ fn color_to_hex(color: Color) -> String {
     format!("#{:02x}{:02x}{:02x}", c.red, c.green, c.blue)
 }
 
-/// Turn the hex strings currently in the UI into the live custom colours.
-/// A half-typed or invalid value keeps the previous valid colour.
 fn apply_custom_hexes(ui: &AppWindow) {
     let theme = ui.global::<Theme>();
 
@@ -442,71 +179,25 @@ fn save_from_ui(ui: &AppWindow) {
     }
 }
 
-// ─── Navigation State ───────────────────────────────────────────────────────
+// ─── Clipboard state for cut/copy/paste ──────────────────────────────────────
 
-struct NavState {
-    history: Vec<PathBuf>,
-    index: usize,
-}
-
-impl NavState {
-    fn new() -> Self {
-        Self {
-            history: vec![],
-            index: 0,
-        }
-    }
-
-    fn current(&self) -> Option<&PathBuf> {
-        if self.history.is_empty() {
-            None
-        } else {
-            self.history.get(self.index)
-        }
-    }
-
-    fn push(&mut self, path: PathBuf) {
-        // Drop forward history when navigating to a new location
-        self.history.truncate(self.index + 1);
-        self.history.push(path);
-        self.index = self.history.len() - 1;
-    }
-
-    fn can_back(&self) -> bool {
-        self.index > 0
-    }
-
-    fn can_forward(&self) -> bool {
-        self.index + 1 < self.history.len()
-    }
-
-    fn go_back(&mut self) -> Option<&PathBuf> {
-        if self.can_back() {
-            self.index -= 1;
-            self.current()
-        } else {
-            None
-        }
-    }
-
-    fn go_forward(&mut self) -> Option<&PathBuf> {
-        if self.can_forward() {
-            self.index += 1;
-            self.current()
-        } else {
-            None
-        }
-    }
+#[derive(Default)]
+struct ClipboardState {
+    paths: Vec<PathBuf>,
+    is_cut: bool,
 }
 
 // ─── Apply a directory (or home) to the UI ──────────────────────────────────
 
-fn apply_directory(ui: &AppWindow, path: &Path) {
-    let (state, entries) = read_directory(path);
+fn apply_directory(ui: &AppWindow, path: &Path, show_hidden: bool) {
+    let sort_field = ui.get_sort_field();
+    let sort_order = ui.get_sort_order();
+    let (state, entries) = read_directory(path, show_hidden, sort_field, sort_order);
     ui.set_files(ModelRc::new(VecModel::from(entries)));
     ui.set_browse_state(state);
     ui.set_selected_index(-1);
     ui.set_current_path(path.to_string_lossy().as_ref().into());
+    update_details_for_selection(ui);
     update_nav_buttons(ui);
 }
 
@@ -515,18 +206,77 @@ fn apply_home(ui: &AppWindow) {
     ui.set_browse_state(BrowseState::Home);
     ui.set_selected_index(-1);
     ui.set_current_path(SharedString::from(""));
+    update_details_for_selection(ui);
     update_nav_buttons(ui);
 }
 
 fn update_nav_buttons(ui: &AppWindow) {
-    // can-go-up: true whenever we're not at home AND path has a parent
     let path_str = ui.get_current_path().to_string();
     let can_up = !path_str.is_empty() && {
         let p = PathBuf::from(&path_str);
         p.parent().is_some()
     };
     ui.set_can_go_up(can_up);
-    // back/forward are set from NavState, handled by callers
+}
+
+fn update_details_for_selection(ui: &AppWindow) {
+    let sel = ui.get_selected_index();
+    if sel < 0 {
+        ui.set_selected_details(FileDetails {
+            name: "".into(),
+            is_dir: false,
+            file_type: "".into(),
+            location: "".into(),
+            date_modified: "".into(),
+            size: "".into(),
+            has_selection: false,
+        });
+        return;
+    }
+
+    let files = ui.get_files();
+    if let Some(entry) = files.row_data(sel as usize) {
+        let current_str = ui.get_current_path().to_string();
+        let item_path = if current_str.is_empty() {
+            PathBuf::from(entry.name.to_string())
+        } else {
+            PathBuf::from(&current_str).join(entry.name.to_string())
+        };
+        let details = get_file_details(&item_path);
+        ui.set_selected_details(details);
+    }
+}
+
+fn resolve_special_path(kind: &str) -> PathBuf {
+    let home = env::var("HOME").unwrap_or_else(|_| "/home".to_string());
+    let home_path = PathBuf::from(&home);
+    match kind {
+        "desktop" => {
+            let p = home_path.join("Desktop");
+            if p.exists() { p } else { home_path }
+        }
+        "downloads" => {
+            let p = home_path.join("Downloads");
+            if p.exists() { p } else { home_path }
+        }
+        "documents" => {
+            let p = home_path.join("Documents");
+            if p.exists() { p } else { home_path }
+        }
+        "pictures" => {
+            let p = home_path.join("Pictures");
+            if p.exists() { p } else { home_path }
+        }
+        "music" => {
+            let p = home_path.join("Music");
+            if p.exists() { p } else { home_path }
+        }
+        "videos" => {
+            let p = home_path.join("Videos");
+            if p.exists() { p } else { home_path }
+        }
+        _ => home_path,
+    }
 }
 
 fn main() -> Result<(), slint::PlatformError> {
@@ -534,8 +284,12 @@ fn main() -> Result<(), slint::PlatformError> {
     ui.set_disks(ModelRc::new(VecModel::from(collect_disks())));
     ui.set_files(ModelRc::new(VecModel::from(vec![])));
     ui.set_browse_state(BrowseState::Home);
+    ui.set_view_mode(ViewMode::Grid);
+    ui.set_sort_field(SortField::Name);
+    ui.set_sort_order(SortOrder::Ascending);
+    ui.set_show_details(true);
 
-    // Restore the theme and the custom colours saved by the previous run.
+    // Restore the theme and custom colours
     let saved = Config::load();
     let theme = ui.global::<Theme>();
     theme.set_preference(saved.theme.into());
@@ -550,15 +304,36 @@ fn main() -> Result<(), slint::PlatformError> {
     theme.set_custom_icon_tint_hex(saved.custom.icon_tint.as_str().into());
     apply_custom_hexes(&ui);
 
-    // ── Navigation state (shared via Rc<RefCell<>>) ──────────────────────────
-    use std::cell::RefCell;
-    use std::rc::Rc;
+    // ── CLI Argument & Initial Navigation Target ─────────────────────────────
+    let cli_arg = env::args().nth(1);
+    let initial_target = if let Some(ref path_str) = cli_arg {
+        let path = PathBuf::from(path_str);
+        if path.is_dir() {
+            let canonical = path.canonicalize().unwrap_or(path);
+            NavTarget::Directory(canonical)
+        } else {
+            NavTarget::Home
+        }
+    } else {
+        NavTarget::Home
+    };
 
-    let nav = Rc::new(RefCell::new(NavState::new()));
+    let show_hidden = Rc::new(RefCell::new(false));
+    let clipboard = Rc::new(RefCell::new(ClipboardState::default()));
+    let nav = Rc::new(RefCell::new(NavState::new(initial_target.clone())));
+
+    // Apply the initial target to the UI
+    match &initial_target {
+        NavTarget::Home => apply_home(&ui),
+        NavTarget::Directory(p) => apply_directory(&ui, p, *show_hidden.borrow()),
+    }
+    ui.set_can_go_back(false);
+    ui.set_can_go_forward(false);
 
     // ── navigate-to ──────────────────────────────────────────────────────────
     let ui_weak = ui.as_weak();
     let nav_clone = nav.clone();
+    let show_hidden_clone = show_hidden.clone();
     ui.on_navigate_to(move |raw_path| {
         let Some(ui) = ui_weak.upgrade() else { return };
         let raw = raw_path.to_string();
@@ -566,34 +341,48 @@ fn main() -> Result<(), slint::PlatformError> {
         let target: PathBuf = if raw.starts_with('/') {
             PathBuf::from(&raw)
         } else {
-            // relative: resolve against current path
             let current_str = ui.get_current_path().to_string();
             if current_str.is_empty() {
-                // at home: ignore relative paths (shouldn't happen)
                 return;
             }
             PathBuf::from(&current_str).join(&raw)
         };
 
-        // Canonicalize to resolve ".." and symlinks
         let resolved = target.canonicalize().unwrap_or(target);
 
-        nav_clone.borrow_mut().push(resolved.clone());
+        nav_clone.borrow_mut().push(NavTarget::Directory(resolved.clone()));
         let nav_ref = nav_clone.borrow();
         ui.set_can_go_back(nav_ref.can_back());
         ui.set_can_go_forward(nav_ref.can_forward());
         drop(nav_ref);
 
-        apply_directory(&ui, &resolved);
+        apply_directory(&ui, &resolved, *show_hidden_clone.borrow());
     });
 
-    // ── navigate-home ─────────────────────────────────────────────────────────
+    // ── navigate-special (Desktop, Downloads, etc.) ──────────────────────────
+    let ui_weak = ui.as_weak();
+    let nav_clone = nav.clone();
+    let show_hidden_clone = show_hidden.clone();
+    ui.on_navigate_special(move |kind| {
+        let Some(ui) = ui_weak.upgrade() else { return };
+        let target = resolve_special_path(&kind);
+        let resolved = target.canonicalize().unwrap_or(target);
+
+        nav_clone.borrow_mut().push(NavTarget::Directory(resolved.clone()));
+        let nav_ref = nav_clone.borrow();
+        ui.set_can_go_back(nav_ref.can_back());
+        ui.set_can_go_forward(nav_ref.can_forward());
+        drop(nav_ref);
+
+        apply_directory(&ui, &resolved, *show_hidden_clone.borrow());
+    });
+
+    // ── navigate-home (This PC) ──────────────────────────────────────────────
     let ui_weak = ui.as_weak();
     let nav_clone = nav.clone();
     ui.on_navigate_home(move || {
         let Some(ui) = ui_weak.upgrade() else { return };
-        // Push a sentinel so back works
-        nav_clone.borrow_mut().push(PathBuf::from("__home__"));
+        nav_clone.borrow_mut().push(NavTarget::Home);
         let nav_ref = nav_clone.borrow();
         ui.set_can_go_back(nav_ref.can_back());
         ui.set_can_go_forward(nav_ref.can_forward());
@@ -604,6 +393,7 @@ fn main() -> Result<(), slint::PlatformError> {
     // ── navigate-up ───────────────────────────────────────────────────────────
     let ui_weak = ui.as_weak();
     let nav_clone = nav.clone();
+    let show_hidden_clone = show_hidden.clone();
     ui.on_navigate_up(move || {
         let Some(ui) = ui_weak.upgrade() else { return };
         let current_str = ui.get_current_path().to_string();
@@ -614,24 +404,22 @@ fn main() -> Result<(), slint::PlatformError> {
         if let Some(parent) = current.parent() {
             let parent = parent.to_path_buf();
             if parent.as_os_str().is_empty() {
-                // went above root → go home
-                nav_clone.borrow_mut().push(PathBuf::from("__home__"));
+                nav_clone.borrow_mut().push(NavTarget::Home);
                 let nav_ref = nav_clone.borrow();
                 ui.set_can_go_back(nav_ref.can_back());
                 ui.set_can_go_forward(nav_ref.can_forward());
                 drop(nav_ref);
                 apply_home(&ui);
             } else {
-                nav_clone.borrow_mut().push(parent.clone());
+                nav_clone.borrow_mut().push(NavTarget::Directory(parent.clone()));
                 let nav_ref = nav_clone.borrow();
                 ui.set_can_go_back(nav_ref.can_back());
                 ui.set_can_go_forward(nav_ref.can_forward());
                 drop(nav_ref);
-                apply_directory(&ui, &parent);
+                apply_directory(&ui, &parent, *show_hidden_clone.borrow());
             }
         } else {
-            // Already at root – go home
-            nav_clone.borrow_mut().push(PathBuf::from("__home__"));
+            nav_clone.borrow_mut().push(NavTarget::Home);
             let nav_ref = nav_clone.borrow();
             ui.set_can_go_back(nav_ref.can_back());
             ui.set_can_go_forward(nav_ref.can_forward());
@@ -643,19 +431,19 @@ fn main() -> Result<(), slint::PlatformError> {
     // ── navigate-back ─────────────────────────────────────────────────────────
     let ui_weak = ui.as_weak();
     let nav_clone = nav.clone();
+    let show_hidden_clone = show_hidden.clone();
     ui.on_navigate_back(move || {
         let Some(ui) = ui_weak.upgrade() else { return };
         let mut nav_ref = nav_clone.borrow_mut();
-        if let Some(path) = nav_ref.go_back().cloned() {
+        if let Some(target) = nav_ref.go_back().cloned() {
             let can_back = nav_ref.can_back();
             let can_forward = nav_ref.can_forward();
             drop(nav_ref);
             ui.set_can_go_back(can_back);
             ui.set_can_go_forward(can_forward);
-            if path == PathBuf::from("__home__") {
-                apply_home(&ui);
-            } else {
-                apply_directory(&ui, &path);
+            match target {
+                NavTarget::Home => apply_home(&ui),
+                NavTarget::Directory(path) => apply_directory(&ui, &path, *show_hidden_clone.borrow()),
             }
         }
     });
@@ -663,24 +451,39 @@ fn main() -> Result<(), slint::PlatformError> {
     // ── navigate-forward ──────────────────────────────────────────────────────
     let ui_weak = ui.as_weak();
     let nav_clone = nav.clone();
+    let show_hidden_clone = show_hidden.clone();
     ui.on_navigate_forward(move || {
         let Some(ui) = ui_weak.upgrade() else { return };
         let mut nav_ref = nav_clone.borrow_mut();
-        if let Some(path) = nav_ref.go_forward().cloned() {
+        if let Some(target) = nav_ref.go_forward().cloned() {
             let can_back = nav_ref.can_back();
             let can_forward = nav_ref.can_forward();
             drop(nav_ref);
             ui.set_can_go_back(can_back);
             ui.set_can_go_forward(can_forward);
-            if path == PathBuf::from("__home__") {
-                apply_home(&ui);
-            } else {
-                apply_directory(&ui, &path);
+            match target {
+                NavTarget::Home => apply_home(&ui),
+                NavTarget::Directory(path) => apply_directory(&ui, &path, *show_hidden_clone.borrow()),
             }
         }
     });
 
-    // ── key-nav (letter navigation) ───────────────────────────────────────────
+    // ── refresh ───────────────────────────────────────────────────────────────
+    let ui_weak = ui.as_weak();
+    let show_hidden_clone = show_hidden.clone();
+    ui.on_refresh(move || {
+        let Some(ui) = ui_weak.upgrade() else { return };
+        let current_str = ui.get_current_path().to_string();
+        if current_str.is_empty() {
+            ui.set_disks(ModelRc::new(VecModel::from(collect_disks())));
+            apply_home(&ui);
+        } else {
+            let path = PathBuf::from(&current_str);
+            apply_directory(&ui, &path, *show_hidden_clone.borrow());
+        }
+    });
+
+    // ── key-nav (letter navigation in directory) ──────────────────────────────
     let ui_weak = ui.as_weak();
     ui.on_key_nav(move |ch| {
         let Some(ui) = ui_weak.upgrade() else { return };
@@ -722,6 +525,7 @@ fn main() -> Result<(), slint::PlatformError> {
         };
 
         ui.set_selected_index(next_index);
+        update_details_for_selection(&ui);
     });
 
     // ── navigate-arrows ───────────────────────────────────────────────────────
@@ -742,11 +546,13 @@ fn main() -> Result<(), slint::PlatformError> {
             (current + delta).clamp(0, count - 1)
         };
         ui.set_selected_index(next);
+        update_details_for_selection(&ui);
     });
 
     // ── activate-selected (Enter key) ─────────────────────────────────────────
     let ui_weak = ui.as_weak();
     let nav_clone = nav.clone();
+    let show_hidden_clone = show_hidden.clone();
     ui.on_activate_selected(move || {
         let Some(ui) = ui_weak.upgrade() else { return };
         if ui.get_browse_state() != BrowseState::Directory {
@@ -763,18 +569,157 @@ fn main() -> Result<(), slint::PlatformError> {
                 let target = PathBuf::from(&current_str).join(entry.name.to_string());
                 let resolved = target.canonicalize().unwrap_or(target);
 
-                nav_clone.borrow_mut().push(resolved.clone());
+                nav_clone.borrow_mut().push(NavTarget::Directory(resolved.clone()));
                 let nav_ref = nav_clone.borrow();
                 ui.set_can_go_back(nav_ref.can_back());
                 ui.set_can_go_forward(nav_ref.can_forward());
                 drop(nav_ref);
 
-                apply_directory(&ui, &resolved);
+                apply_directory(&ui, &resolved, *show_hidden_clone.borrow());
             }
         }
     });
 
-    // ── Theme ─────────────────────────────────────────────────────────────────
+    // ── Sorting ───────────────────────────────────────────────────────────────
+    let ui_weak = ui.as_weak();
+    ui.on_sort_changed(move |field, order| {
+        let Some(ui) = ui_weak.upgrade() else { return };
+        if ui.get_browse_state() != BrowseState::Directory {
+            return;
+        }
+        let files_rc = ui.get_files();
+        let mut entries: Vec<FileEntry> = (0..files_rc.row_count())
+            .filter_map(|i| files_rc.row_data(i))
+            .collect();
+        sort_entries(&mut entries, field, order);
+        ui.set_files(ModelRc::new(VecModel::from(entries)));
+        ui.set_selected_index(-1);
+        update_details_for_selection(&ui);
+    });
+
+    // ── View Mode changed ─────────────────────────────────────────────────────
+    let ui_weak = ui.as_weak();
+    ui.on_view_mode_changed(move |mode| {
+        let Some(ui) = ui_weak.upgrade() else { return };
+        ui.set_view_mode(mode);
+    });
+
+    // ── New folder action ─────────────────────────────────────────────────────
+    let ui_weak = ui.as_weak();
+    let show_hidden_clone = show_hidden.clone();
+    ui.on_new_folder(move || {
+        let Some(ui) = ui_weak.upgrade() else { return };
+        let current_str = ui.get_current_path().to_string();
+        if current_str.is_empty() {
+            return;
+        }
+        let base_dir = PathBuf::from(&current_str);
+        let mut folder_name = "New folder".to_string();
+        let mut counter = 2;
+        while base_dir.join(&folder_name).exists() {
+            folder_name = format!("New folder ({counter})");
+            counter += 1;
+        }
+        let _ = fs::create_dir(base_dir.join(&folder_name));
+        apply_directory(&ui, &base_dir, *show_hidden_clone.borrow());
+    });
+
+    // ── Delete action ─────────────────────────────────────────────────────────
+    let ui_weak = ui.as_weak();
+    let show_hidden_clone = show_hidden.clone();
+    ui.on_delete(move || {
+        let Some(ui) = ui_weak.upgrade() else { return };
+        let sel = ui.get_selected_index();
+        if sel < 0 {
+            return;
+        }
+        let files = ui.get_files();
+        if let Some(entry) = files.row_data(sel as usize) {
+            let current_str = ui.get_current_path().to_string();
+            let path = PathBuf::from(&current_str).join(entry.name.to_string());
+            if entry.is_dir {
+                let _ = fs::remove_dir_all(&path);
+            } else {
+                let _ = fs::remove_file(&path);
+            }
+            apply_directory(&ui, &PathBuf::from(&current_str), *show_hidden_clone.borrow());
+        }
+    });
+
+    // ── Cut / Copy / Paste actions ────────────────────────────────────────────
+    let ui_weak = ui.as_weak();
+    let clip_clone = clipboard.clone();
+    ui.on_copy(move || {
+        let Some(ui) = ui_weak.upgrade() else { return };
+        let sel = ui.get_selected_index();
+        if sel < 0 { return; }
+        if let Some(entry) = ui.get_files().row_data(sel as usize) {
+            let path = PathBuf::from(ui.get_current_path().to_string()).join(entry.name.to_string());
+            let mut clip = clip_clone.borrow_mut();
+            clip.paths = vec![path];
+            clip.is_cut = false;
+        }
+    });
+
+    let ui_weak = ui.as_weak();
+    let clip_clone = clipboard.clone();
+    ui.on_cut(move || {
+        let Some(ui) = ui_weak.upgrade() else { return };
+        let sel = ui.get_selected_index();
+        if sel < 0 { return; }
+        if let Some(entry) = ui.get_files().row_data(sel as usize) {
+            let path = PathBuf::from(ui.get_current_path().to_string()).join(entry.name.to_string());
+            let mut clip = clip_clone.borrow_mut();
+            clip.paths = vec![path];
+            clip.is_cut = true;
+        }
+    });
+
+    let ui_weak = ui.as_weak();
+    let clip_clone = clipboard.clone();
+    let show_hidden_clone = show_hidden.clone();
+    ui.on_paste(move || {
+        let Some(ui) = ui_weak.upgrade() else { return };
+        let current_str = ui.get_current_path().to_string();
+        if current_str.is_empty() { return; }
+        let dest_dir = PathBuf::from(&current_str);
+
+        let mut clip = clip_clone.borrow_mut();
+        for src in &clip.paths {
+            if let Some(name) = src.file_name() {
+                let dest = dest_dir.join(name);
+                if clip.is_cut {
+                    let _ = fs::rename(src, &dest);
+                } else if src.is_file() {
+                    let _ = fs::copy(src, &dest);
+                }
+            }
+        }
+        if clip.is_cut {
+            clip.paths.clear();
+        }
+        drop(clip);
+
+        apply_directory(&ui, &dest_dir, *show_hidden_clone.borrow());
+    });
+
+    // ── Toggle Hidden files ───────────────────────────────────────────────────
+    let ui_weak = ui.as_weak();
+    let show_hidden_clone = show_hidden.clone();
+    ui.on_toggle_hidden(move || {
+        let Some(ui) = ui_weak.upgrade() else { return };
+        let mut val = show_hidden_clone.borrow_mut();
+        *val = !*val;
+        let is_hidden = *val;
+        drop(val);
+
+        let current_str = ui.get_current_path().to_string();
+        if !current_str.is_empty() {
+            apply_directory(&ui, &PathBuf::from(&current_str), is_hidden);
+        }
+    });
+
+    // ── Theme Selection ───────────────────────────────────────────────────────
     let ui_weak = ui.as_weak();
     ui.on_theme_selected(move |preference| {
         let Some(ui) = ui_weak.upgrade() else { return };
