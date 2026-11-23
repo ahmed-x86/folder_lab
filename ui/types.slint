@@ -11,18 +11,45 @@ export struct DiskInfo {
 export struct FileEntry {
     name: string,
     is-dir: bool,
-    // size string e.g. "1.2 MB" (empty for dirs)
     size: string,
+    size-bytes: int,
+    date-modified: string,
+    date-timestamp: int,
+    file-type: string,
+    is-hidden: bool,
+}
+
+export struct FileDetails {
+    name: string,
+    is-dir: bool,
+    file-type: string,
+    location: string,
+    date-modified: string,
+    size: string,
+    has-selection: bool,
 }
 
 // What the content pane should display
 export enum BrowseState {
-    // Showing the disks/partitions home page
     Home,
-    // Showing directory listing (files list in app)
     Directory,
-    // Current path is not readable (permission denied)
     NoPermission,
-    // Current path is an empty directory
     Empty,
+}
+
+export enum ViewMode {
+    Grid,
+    Details,
+}
+
+export enum SortField {
+    Name,
+    Date,
+    Type,
+    Size,
+}
+
+export enum SortOrder {
+    Ascending,
+    Descending,
 }
