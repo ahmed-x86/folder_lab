@@ -6,6 +6,20 @@ export component AddressBar inherits Rectangle {
     height: 36px;
     background: Theme.bg;
 
+    in property <string> current-path: "";
+    in property <bool> can-go-back: false;
+    in property <bool> can-go-forward: false;
+    in property <bool> can-go-up: false;
+
+    callback navigate-to(string);
+    callback navigate-up();
+    callback navigate-back();
+    callback navigate-forward();
+    callback navigate-home();
+
+    // Whether the address bar is in text-edit mode
+    private property <bool> editing: false;
+
     HorizontalLayout {
         padding-left: 8px;
         padding-right: 8px;
@@ -15,57 +29,115 @@ export component AddressBar inherits Rectangle {
 
         IconButton {
             icon: @image-url("../icons/arrow-left.svg");
+            enabled: root.can-go-back;
+            clicked => { root.navigate-back(); }
         }
 
         IconButton {
             icon: @image-url("../icons/arrow-right.svg");
-            enabled: false;
+            enabled: root.can-go-forward;
+            clicked => { root.navigate-forward(); }
         }
 
         IconButton {
             icon: @image-url("../icons/arrow-up.svg");
+            enabled: root.can-go-up;
+            clicked => { root.navigate-up(); }
         }
 
         IconButton {
             icon: @image-url("../icons/refresh.svg");
-            enabled: false;
+            enabled: root.current-path != "";
+            clicked => {
+                if (root.current-path != "") {
+                    root.navigate-to(root.current-path);
+                }
+            }
         }
 
         Rectangle {
             width: 6px;
         }
 
-        Rectangle {
+        // Address field — always holds a TextInput but switches appearance
+        field-rect := Rectangle {
             horizontal-stretch: 1;
             height: 26px;
             border-width: 1px;
-            border-color: Theme.field-border;
+            border-color: root.editing ? Theme.accent : Theme.field-border;
             border-radius: 2px;
             background: Theme.field-bg;
+            clip: true;
 
             HorizontalLayout {
                 padding-left: 8px;
                 padding-right: 6px;
                 spacing: 6px;
 
+                // PC icon always visible
                 Glyph {
                     source: @image-url("../icons/pc.svg");
                     icon-size: 16px;
                 }
 
-                Text {
-                    text: "Folder Lab";
+                // The TextInput is always present; visibility of the decorative
+                // text overlay is toggled instead.
+                path-input := TextInput {
+                    text: root.current-path;
                     font-size: 12px;
-                    color: Theme.text;
+                    color: root.editing ? Theme.text : transparent;
+                    selection-background-color: Theme.accent.with-alpha(0.35);
+                    selection-foreground-color: Theme.text;
                     vertical-alignment: center;
                     horizontal-stretch: 1;
+                    read-only: !root.editing;
+
+                    accepted => {
+                        root.navigate-to(self.text);
+                        root.editing = false;
+                    }
+
+                    key-pressed(ev) => {
+                        if (ev.text == Key.Escape) {
+                            root.editing = false;
+                            accept
+                        } else {
+                            reject
+                        }
+                    }
                 }
 
-                Glyph {
+                // Chevron – only in browse mode
+                if !root.editing : Glyph {
                     source: @image-url("../icons/chevron-down.svg");
                     tint: Theme.mono-tint;
                     icon-size: 10px;
                     faded: 0.5;
+                }
+            }
+
+            // Overlay text that shows the path/label when not editing.
+            // It sits on top of the transparent TextInput.
+            if !root.editing : Text {
+                x: 8px + 16px + 6px; // padding-left + icon-size + spacing
+                y: 0;
+                width: parent.width - self.x - 22px; // leave room for chevron
+                height: parent.height;
+                text: root.current-path == "" ? "Folder Lab" : root.current-path;
+                font-size: 12px;
+                color: Theme.text;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+
+            // Invisible tap area that enters edit mode
+            if !root.editing : TouchArea {
+                mouse-cursor: MouseCursor.text;
+                clicked => {
+                    root.editing = true;
+                    path-input.text = root.current-path;
+                    path-input.focus();
+                    path-input.select-all();
                 }
             }
         }
@@ -74,6 +146,7 @@ export component AddressBar inherits Rectangle {
             width: 8px;
         }
 
+        // Search box (decorative for now)
         Rectangle {
             width: 196px;
             height: 26px;
@@ -94,10 +167,11 @@ export component AddressBar inherits Rectangle {
                 }
 
                 Text {
-                    text: "Search Folder Lab";
+                    text: root.current-path == "" ? "Search Folder Lab" : "Search \{root.current-path}";
                     font-size: 11px;
                     color: Theme.text-muted;
                     vertical-alignment: center;
+                    overflow: elide;
                 }
             }
         }
