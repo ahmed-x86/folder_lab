@@ -48,7 +48,12 @@ export component DriveCard inherits Rectangle {
         }
     }
 
+    callback double-clicked();
+
     touch := TouchArea {
         mouse-cursor: MouseCursor.pointer;
+        double-clicked => {
+            root.double-clicked();
+        }
     }
 }
