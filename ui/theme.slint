@@ -560,6 +560,11 @@ export global Theme {
     public pure function dot3(p: ThemePreference) -> color { return p-dot3[preset-index(p)]; }
     public pure function dot4(p: ThemePreference) -> color { return p-dot4[preset-index(p)]; }
     public pure function preset-label(p: ThemePreference) -> string { return p-label[preset-index(p)]; }
+    public pure function preset-bg(p: ThemePreference) -> color { return p-bg[preset-index(p)]; }
+    public pure function preset-text(p: ThemePreference) -> color { return p-text[preset-index(p)]; }
+    public pure function preset-border(p: ThemePreference) -> color { return p-border[preset-index(p)]; }
+    public pure function preset-accent(p: ThemePreference) -> color { return p-accent[preset-index(p)]; }
+    public pure function preset-field(p: ThemePreference) -> color { return p-field[preset-index(p)]; }
 
     out property <bool> dark: root.preference == ThemePreference.system
         ? root.system-dark : p-dark[root.idx];
