@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+  <defs>
+    <linearGradient id="pageGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#F3F5F7"/>
+    </linearGradient>
+    <linearGradient id="foldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#DCDEE0"/>
+      <stop offset="100%" stop-color="#B8BCBE"/>
+    </linearGradient>
+    <filter id="fileShadow" x="-10%" y="-5%" width="125%" height="118%">
+      <feDropShadow dx="0" dy="1.5" stdDeviation="1.2" flood-opacity="0.22"/>
+    </filter>
+  </defs>
+
+  <!-- Main Sheet with folded corner at top-right -->
+  <path d="M 10 9 C 10 7.3 11.3 6 13 6 L 28 6 L 38 16 L 38 41 C 38 42.7 36.7 44 35 44 L 13 44 C 11.3 44 10 42.7 10 41 Z"
+        fill="url(#pageGrad)"
+        filter="url(#fileShadow)"
+        stroke="#CCD0D4"
+        stroke-width="0.8"/>
+
+  <!-- Folded corner tab -->
+  <path d="M 28 6 L 28 14 C 28 15.1 28.9 16 30 16 L 38 16 Z"
+        fill="url(#foldGrad)"
+        stroke="#B0B4B8"
+        stroke-width="0.6"/>
+
+  <!-- Document content lines -->
+  <rect x="15" y="21" width="18" height="2" rx="1" fill="#9AA0A6"/>
+  <rect x="15" y="26" width="18" height="2" rx="1" fill="#BDC1C6"/>
+  <rect x="15" y="31" width="18" height="2" rx="1" fill="#BDC1C6"/>
+  <rect x="15" y="36" width="11" height="2" rx="1" fill="#BDC1C6"/>
+</svg>
