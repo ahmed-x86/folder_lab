@@ -5,9 +5,9 @@ mod config;
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-use slint::{Color, ComponentHandle, ModelRc, VecModel};
+use slint::{Color, ComponentHandle, ModelRc, SharedString, VecModel};
 
 use crate::config::{Config, CustomColors, ThemeChoice};
 
@@ -293,6 +293,58 @@ fn collect_disks() -> Vec<DiskInfo> {
         .collect()
 }
 
+/// Read a directory and return (state, entries).
+/// If `path` is relative, it is resolved against `current_path`.
+fn read_directory(path: &Path) -> (BrowseState, Vec<FileEntry>) {
+    // Try to read the directory
+    let read_result = fs::read_dir(path);
+
+    match read_result {
+        Err(e) => {
+            use std::io::ErrorKind;
+            match e.kind() {
+                ErrorKind::PermissionDenied => (BrowseState::NoPermission, vec![]),
+                _ => (BrowseState::NoPermission, vec![]),
+            }
+        }
+        Ok(iter) => {
+            let mut entries: Vec<FileEntry> = iter
+                .filter_map(|e| e.ok())
+                .filter_map(|e| {
+                    let name = e.file_name().to_string_lossy().into_owned();
+                    // Skip hidden files (starting with .)
+                    // Uncomment the next line if you want to show hidden files:
+                    // let _ = ();
+                    let meta = e.metadata().ok()?;
+                    let is_dir = meta.is_dir();
+                    let size = if is_dir {
+                        String::new()
+                    } else {
+                        format_size(meta.len())
+                    };
+                    Some(FileEntry {
+                        name: name.into(),
+                        is_dir,
+                        size: size.into(),
+                    })
+                })
+                .collect();
+
+            if entries.is_empty() {
+                (BrowseState::Empty, vec![])
+            } else {
+                // Sort: directories first, then files, both alphabetically
+                entries.sort_by(|a, b| {
+                    b.is_dir
+                        .cmp(&a.is_dir)
+                        .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+                });
+                (BrowseState::Directory, entries)
+            }
+        }
+    }
+}
+
 /// Parse the hex colours typed on the Settings → Theme page.
 fn parse_hex(value: &str) -> Option<Color> {
     let digits = value.trim().trim_start_matches('#');
@@ -390,9 +442,96 @@ fn save_from_ui(ui: &AppWindow) {
     }
 }
 
+// ─── Navigation State ───────────────────────────────────────────────────────
+
+struct NavState {
+    history: Vec<PathBuf>,
+    index: usize,
+}
+
+impl NavState {
+    fn new() -> Self {
+        Self {
+            history: vec![],
+            index: 0,
+        }
+    }
+
+    fn current(&self) -> Option<&PathBuf> {
+        if self.history.is_empty() {
+            None
+        } else {
+            self.history.get(self.index)
+        }
+    }
+
+    fn push(&mut self, path: PathBuf) {
+        // Drop forward history when navigating to a new location
+        self.history.truncate(self.index + 1);
+        self.history.push(path);
+        self.index = self.history.len() - 1;
+    }
+
+    fn can_back(&self) -> bool {
+        self.index > 0
+    }
+
+    fn can_forward(&self) -> bool {
+        self.index + 1 < self.history.len()
+    }
+
+    fn go_back(&mut self) -> Option<&PathBuf> {
+        if self.can_back() {
+            self.index -= 1;
+            self.current()
+        } else {
+            None
+        }
+    }
+
+    fn go_forward(&mut self) -> Option<&PathBuf> {
+        if self.can_forward() {
+            self.index += 1;
+            self.current()
+        } else {
+            None
+        }
+    }
+}
+
+// ─── Apply a directory (or home) to the UI ──────────────────────────────────
+
+fn apply_directory(ui: &AppWindow, path: &Path) {
+    let (state, entries) = read_directory(path);
+    ui.set_files(ModelRc::new(VecModel::from(entries)));
+    ui.set_browse_state(state);
+    ui.set_current_path(path.to_string_lossy().as_ref().into());
+    update_nav_buttons(ui);
+}
+
+fn apply_home(ui: &AppWindow) {
+    ui.set_files(ModelRc::new(VecModel::from(vec![])));
+    ui.set_browse_state(BrowseState::Home);
+    ui.set_current_path(SharedString::from(""));
+    update_nav_buttons(ui);
+}
+
+fn update_nav_buttons(ui: &AppWindow) {
+    // can-go-up: true whenever we're not at home AND path has a parent
+    let path_str = ui.get_current_path().to_string();
+    let can_up = !path_str.is_empty() && {
+        let p = PathBuf::from(&path_str);
+        p.parent().is_some()
+    };
+    ui.set_can_go_up(can_up);
+    // back/forward are set from NavState, handled by callers
+}
+
 fn main() -> Result<(), slint::PlatformError> {
     let ui = AppWindow::new()?;
     ui.set_disks(ModelRc::new(VecModel::from(collect_disks())));
+    ui.set_files(ModelRc::new(VecModel::from(vec![])));
+    ui.set_browse_state(BrowseState::Home);
 
     // Restore the theme and the custom colours saved by the previous run.
     let saved = Config::load();
@@ -409,7 +548,137 @@ fn main() -> Result<(), slint::PlatformError> {
     theme.set_custom_icon_tint_hex(saved.custom.icon_tint.as_str().into());
     apply_custom_hexes(&ui);
 
-    // Picking a preset is applied immediately and remembered for the next run.
+    // ── Navigation state (shared via Rc<RefCell<>>) ──────────────────────────
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    let nav = Rc::new(RefCell::new(NavState::new()));
+
+    // ── navigate-to ──────────────────────────────────────────────────────────
+    let ui_weak = ui.as_weak();
+    let nav_clone = nav.clone();
+    ui.on_navigate_to(move |raw_path| {
+        let Some(ui) = ui_weak.upgrade() else { return };
+        let raw = raw_path.to_string();
+
+        let target: PathBuf = if raw.starts_with('/') {
+            PathBuf::from(&raw)
+        } else {
+            // relative: resolve against current path
+            let current_str = ui.get_current_path().to_string();
+            if current_str.is_empty() {
+                // at home: ignore relative paths (shouldn't happen)
+                return;
+            }
+            PathBuf::from(&current_str).join(&raw)
+        };
+
+        // Canonicalize to resolve ".." and symlinks
+        let resolved = target.canonicalize().unwrap_or(target);
+
+        nav_clone.borrow_mut().push(resolved.clone());
+        let nav_ref = nav_clone.borrow();
+        ui.set_can_go_back(nav_ref.can_back());
+        ui.set_can_go_forward(nav_ref.can_forward());
+        drop(nav_ref);
+
+        apply_directory(&ui, &resolved);
+    });
+
+    // ── navigate-home ─────────────────────────────────────────────────────────
+    let ui_weak = ui.as_weak();
+    let nav_clone = nav.clone();
+    ui.on_navigate_home(move || {
+        let Some(ui) = ui_weak.upgrade() else { return };
+        // Push a sentinel so back works
+        nav_clone.borrow_mut().push(PathBuf::from("__home__"));
+        let nav_ref = nav_clone.borrow();
+        ui.set_can_go_back(nav_ref.can_back());
+        ui.set_can_go_forward(nav_ref.can_forward());
+        drop(nav_ref);
+        apply_home(&ui);
+    });
+
+    // ── navigate-up ───────────────────────────────────────────────────────────
+    let ui_weak = ui.as_weak();
+    let nav_clone = nav.clone();
+    ui.on_navigate_up(move || {
+        let Some(ui) = ui_weak.upgrade() else { return };
+        let current_str = ui.get_current_path().to_string();
+        if current_str.is_empty() {
+            return;
+        }
+        let current = PathBuf::from(&current_str);
+        if let Some(parent) = current.parent() {
+            let parent = parent.to_path_buf();
+            if parent.as_os_str().is_empty() {
+                // went above root → go home
+                nav_clone.borrow_mut().push(PathBuf::from("__home__"));
+                let nav_ref = nav_clone.borrow();
+                ui.set_can_go_back(nav_ref.can_back());
+                ui.set_can_go_forward(nav_ref.can_forward());
+                drop(nav_ref);
+                apply_home(&ui);
+            } else {
+                nav_clone.borrow_mut().push(parent.clone());
+                let nav_ref = nav_clone.borrow();
+                ui.set_can_go_back(nav_ref.can_back());
+                ui.set_can_go_forward(nav_ref.can_forward());
+                drop(nav_ref);
+                apply_directory(&ui, &parent);
+            }
+        } else {
+            // Already at root – go home
+            nav_clone.borrow_mut().push(PathBuf::from("__home__"));
+            let nav_ref = nav_clone.borrow();
+            ui.set_can_go_back(nav_ref.can_back());
+            ui.set_can_go_forward(nav_ref.can_forward());
+            drop(nav_ref);
+            apply_home(&ui);
+        }
+    });
+
+    // ── navigate-back ─────────────────────────────────────────────────────────
+    let ui_weak = ui.as_weak();
+    let nav_clone = nav.clone();
+    ui.on_navigate_back(move || {
+        let Some(ui) = ui_weak.upgrade() else { return };
+        let mut nav_ref = nav_clone.borrow_mut();
+        if let Some(path) = nav_ref.go_back().cloned() {
+            let can_back = nav_ref.can_back();
+            let can_forward = nav_ref.can_forward();
+            drop(nav_ref);
+            ui.set_can_go_back(can_back);
+            ui.set_can_go_forward(can_forward);
+            if path == PathBuf::from("__home__") {
+                apply_home(&ui);
+            } else {
+                apply_directory(&ui, &path);
+            }
+        }
+    });
+
+    // ── navigate-forward ──────────────────────────────────────────────────────
+    let ui_weak = ui.as_weak();
+    let nav_clone = nav.clone();
+    ui.on_navigate_forward(move || {
+        let Some(ui) = ui_weak.upgrade() else { return };
+        let mut nav_ref = nav_clone.borrow_mut();
+        if let Some(path) = nav_ref.go_forward().cloned() {
+            let can_back = nav_ref.can_back();
+            let can_forward = nav_ref.can_forward();
+            drop(nav_ref);
+            ui.set_can_go_back(can_back);
+            ui.set_can_go_forward(can_forward);
+            if path == PathBuf::from("__home__") {
+                apply_home(&ui);
+            } else {
+                apply_directory(&ui, &path);
+            }
+        }
+    });
+
+    // ── Theme ─────────────────────────────────────────────────────────────────
     let ui_weak = ui.as_weak();
     ui.on_theme_selected(move |preference| {
         let Some(ui) = ui_weak.upgrade() else { return };
@@ -417,7 +686,6 @@ fn main() -> Result<(), slint::PlatformError> {
         save_from_ui(&ui);
     });
 
-    // Editing a custom colour applies it live and remembers it.
     let ui_weak = ui.as_weak();
     ui.on_custom_colors_changed(move || {
         let Some(ui) = ui_weak.upgrade() else { return };
