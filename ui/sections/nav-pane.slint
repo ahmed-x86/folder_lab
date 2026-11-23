@@ -5,7 +5,10 @@ export component NavPane inherits Rectangle {
     width: 200px;
     background: Theme.sidebar-bg;
 
+    in property <string> current-path: "";
+
     callback navigate-to(string);
+    callback navigate-special(string);
     callback navigate-home();
 
     VerticalLayout {
@@ -16,14 +19,14 @@ export component NavPane inherits Rectangle {
         SidebarItem {
             icon: @image-url("../icons/home.svg");
             label: "Home";
-            clicked => { root.navigate-home(); }
+            clicked => { root.navigate-special("home"); }
         }
 
         SidebarItem {
             icon: @image-url("../icons/gallery.svg");
             label: "Gallery";
+            clicked => { root.navigate-special("pictures"); }
         }
-
 
         Rectangle {
             height: 9px;
@@ -39,36 +42,42 @@ export component NavPane inherits Rectangle {
             icon: @image-url("../icons/folder-desktop.svg");
             label: "Desktop";
             expandable: true;
+            clicked => { root.navigate-special("desktop"); }
         }
 
         SidebarItem {
             icon: @image-url("../icons/folder-downloads.svg");
             label: "Downloads";
             expandable: true;
+            clicked => { root.navigate-special("downloads"); }
         }
 
         SidebarItem {
             icon: @image-url("../icons/folder-documents.svg");
             label: "Documents";
             expandable: true;
+            clicked => { root.navigate-special("documents"); }
         }
 
         SidebarItem {
             icon: @image-url("../icons/folder-pictures.svg");
             label: "Pictures";
             expandable: true;
+            clicked => { root.navigate-special("pictures"); }
         }
 
         SidebarItem {
             icon: @image-url("../icons/folder-music.svg");
             label: "Music";
             expandable: true;
+            clicked => { root.navigate-special("music"); }
         }
 
         SidebarItem {
             icon: @image-url("../icons/folder-videos.svg");
             label: "Videos";
             expandable: true;
+            clicked => { root.navigate-special("videos"); }
         }
 
         Rectangle {
@@ -83,8 +92,8 @@ export component NavPane inherits Rectangle {
 
         SidebarItem {
             icon: @image-url("../icons/pc.svg");
-            label: "Folder Lab";
-            selected: true;
+            label: "This PC";
+            selected: root.current-path == "";
             clicked => { root.navigate-home(); }
         }
 
