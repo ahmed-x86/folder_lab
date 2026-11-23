@@ -1,8 +1,12 @@
 import { Theme } from "../theme.slint";
 import { Glyph } from "../components/glyph.slint";
+import { ViewMode } from "../types.slint";
 
 export component StatusBar inherits Rectangle {
-    in property <int> item-count;
+    in property <int> item-count: 0;
+    in property <int> selected-count: 0;
+    in-out property <ViewMode> view-mode: ViewMode.Grid;
+    callback view-mode-changed(ViewMode);
 
     height: 24px;
     background: Theme.status-bg;
@@ -10,10 +14,13 @@ export component StatusBar inherits Rectangle {
     HorizontalLayout {
         padding-left: 12px;
         padding-right: 8px;
-        spacing: 10px;
+        spacing: 8px;
 
+        // Items count
         Text {
-            text: "\{root.item-count} items";
+            text: root.selected-count > 0
+                ? "\{root.item-count} items | \{root.selected-count} item selected |"
+                : "\{root.item-count} items |";
             font-size: 11px;
             color: Theme.text-secondary;
             vertical-alignment: center;
@@ -23,18 +30,54 @@ export component StatusBar inherits Rectangle {
             horizontal-stretch: 1;
         }
 
-        Glyph {
-            source: @image-url("../icons/view-details.svg");
-            tint: Theme.mono-tint;
-            icon-size: 14px;
-            faded: 0.75;
+        // Details view toggle button
+        btn-details := Rectangle {
+            width: 22px;
+            height: 20px;
+            border-radius: 3px;
+            background: root.view-mode == ViewMode.Details
+                ? Theme.selected
+                : (touch-details.has-hover ? Theme.hover : transparent);
+
+            Glyph {
+                source: @image-url("../icons/view-details.svg");
+                tint: root.view-mode == ViewMode.Details ? Theme.accent : Theme.mono-tint;
+                icon-size: 14px;
+                faded: root.view-mode == ViewMode.Details ? 1.0 : 0.65;
+            }
+
+            touch-details := TouchArea {
+                mouse-cursor: MouseCursor.pointer;
+                clicked => {
+                    root.view-mode = ViewMode.Details;
+                    root.view-mode-changed(ViewMode.Details);
+                }
+            }
         }
 
-        Glyph {
-            source: @image-url("../icons/view-grid.svg");
-            tint: Theme.mono-tint;
-            icon-size: 14px;
-            faded: 0.75;
+        // Grid view toggle button
+        btn-grid := Rectangle {
+            width: 22px;
+            height: 20px;
+            border-radius: 3px;
+            background: root.view-mode == ViewMode.Grid
+                ? Theme.selected
+                : (touch-grid.has-hover ? Theme.hover : transparent);
+
+            Glyph {
+                source: @image-url("../icons/view-grid.svg");
+                tint: root.view-mode == ViewMode.Grid ? Theme.accent : Theme.mono-tint;
+                icon-size: 14px;
+                faded: root.view-mode == ViewMode.Grid ? 1.0 : 0.65;
+            }
+
+            touch-grid := TouchArea {
+                mouse-cursor: MouseCursor.pointer;
+                clicked => {
+                    root.view-mode = ViewMode.Grid;
+                    root.view-mode-changed(ViewMode.Grid);
+                }
+            }
         }
     }
 }
