@@ -1,0 +1,58 @@
+import { Theme } from "../theme.slint";
+import { FileEntry } from "../types.slint";
+
+export component FileCard inherits Rectangle {
+    in property <FileEntry> entry;
+    in property <bool> selected: false;
+    callback double-clicked();
+    callback clicked();
+
+    width: 96px;
+    height: 94px;
+    border-radius: 4px;
+    background: root.selected ? Theme.selected : (touch.has-hover ? Theme.card-hover : transparent);
+    border-width: 1px;
+    border-color: root.selected ? Theme.accent.with-alpha(0.6) : (touch.has-hover ? Theme.hover-border : transparent);
+
+    VerticalLayout {
+        alignment: center;
+        spacing: 6px;
+        padding-left: 6px;
+        padding-right: 6px;
+        padding-top: 6px;
+        padding-bottom: 6px;
+
+        HorizontalLayout {
+            alignment: center;
+            height: 48px;
+
+            Image {
+                source: root.entry.is-dir
+                    ? @image-url("../icons/folder.svg")
+                    : @image-url("../icons/file.svg");
+                width: 48px;
+                height: 48px;
+                image-fit: ImageFit.contain;
+            }
+        }
+
+        Text {
+            text: root.entry.name;
+            font-size: 11px;
+            color: Theme.text;
+            horizontal-alignment: TextHorizontalAlignment.center;
+            overflow: TextOverflow.elide;
+            wrap: TextWrap.no-wrap;
+        }
+    }
+
+    touch := TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+        clicked => {
+            root.clicked();
+        }
+        double-clicked => {
+            root.double-clicked();
+        }
+    }
+}
