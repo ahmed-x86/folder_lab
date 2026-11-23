@@ -1,193 +1,640 @@
 import { Palette } from "std-widgets.slint";
 
-export enum ThemePreference { system, light, dark, latte, frappe, macchiato, mocha }
+export enum ThemePreference { system, light, dark, latte, frappe, macchiato, mocha, whiteDark, blackLight, blueAccent, butterCream, mintCream, oliveGrove, violetGrid, violetNight, android13, nord, dracula, gruvbox, tokyoNight, rose, amoledBlack, oceanTeal, sunset, forest, sakura, custom }
 
-// Every color used by the UI lives here. `preference` is changed from the
-// Settings page; "system" follows the desktop light/dark setting live.
+// All presets from the colour picker, plus a fully editable custom palette.
 export global Theme {
     in-out property <ThemePreference> preference: ThemePreference.system;
 
-    // Resolve "system" to light/dark, everything else is a concrete theme.
-    out property <bool> dark:
-        preference == ThemePreference.dark ? true
-        : preference == ThemePreference.light ? false
-        : preference == ThemePreference.latte ? false
-        : preference == ThemePreference.frappe ? true
-        : preference == ThemePreference.macchiato ? true
-        : preference == ThemePreference.mocha ? true
-        : Palette.color-scheme == ColorScheme.dark;
+    // Hex text typed by the user (bound to the input fields).
+    in-out property <string> custom-bg-hex: "#1e1e2e";
+    in-out property <string> custom-sidebar-hex: "#181825";
+    in-out property <string> custom-ribbon-hex: "#11111b";
+    in-out property <string> custom-field-hex: "#313244";
+    in-out property <string> custom-accent-hex: "#cba6f7";
+    in-out property <string> custom-text-hex: "#cdd6f4";
+    in-out property <string> custom-text-secondary-hex: "#bac2de";
+    in-out property <string> custom-border-hex: "#585b70";
+    in-out property <string> custom-icon-tint-hex: "#cdd6f4";
 
-    // Helper booleans for Catppuccin flavors
-    out property <bool> is-latte:    preference == ThemePreference.latte;
-    out property <bool> is-frappe:   preference == ThemePreference.frappe;
-    out property <bool> is-macchiato: preference == ThemePreference.macchiato;
-    out property <bool> is-mocha:    preference == ThemePreference.mocha;
-    out property <bool> is-catppuccin: is-latte || is-frappe || is-macchiato || is-mocha;
+    // Parsed colours, kept in sync with the hex text by the app.
+    in-out property <color> custom-bg: #1e1e2e;
+    in-out property <color> custom-sidebar: #181825;
+    in-out property <color> custom-ribbon: #11111b;
+    in-out property <color> custom-field: #313244;
+    in-out property <color> custom-accent: #cba6f7;
+    in-out property <color> custom-text: #cdd6f4;
+    in-out property <color> custom-text-secondary: #bac2de;
+    in-out property <color> custom-border: #585b70;
+    in-out property <color> custom-icon-tint: #cdd6f4;
 
-    // ── surfaces ──
-    out property <brush> bg:
-        is-latte ? #eff1f5
-        : is-frappe ? #303446
-        : is-macchiato ? #24273a
-        : is-mocha ? #1e1e2e
-        : dark ? #1f1f1f : #ffffff;
+    property <bool> system-dark: Palette.color-scheme == ColorScheme.dark;
+    property <int> idx: Theme.preset-index(root.preference);
 
-    out property <brush> tabs-bg:
-        is-latte ? #e6e9ef
-        : is-frappe ? #292c3c
-        : is-macchiato ? #1e2030
-        : is-mocha ? #181825
-        : dark ? #2b2b2b : #f2f2f2;
+    property <[color]> p-bg: [
+        #1f1f1f,
+        #ffffff,
+        #1f1f1f,
+        #eff1f5,
+        #303446,
+        #24273a,
+        #1e1e2e,
+        #1b1b1b,
+        #ffffff,
+        #1c2333,
+        #fff6d8,
+        #eafff3,
+        #f1f1d9,
+        #4a2f66,
+        #1a1533,
+        #121212,
+        #2e3440,
+        #282a36,
+        #282828,
+        #1a1b26,
+        #fff2f0,
+        #000000,
+        #0e1f24,
+        #2a1510,
+        #0f2118,
+        #fff5f7,
+        #1e1e2e
+    ];
+    property <[color]> p-tabs: [
+        #2b2b2b,
+        #f2f2f2,
+        #2b2b2b,
+        #e6e9ef,
+        #292c3c,
+        #1e2030,
+        #181825,
+        #242424,
+        #f0f0f0,
+        #222b3d,
+        #f7e9b8,
+        #d4f3e2,
+        #dfe0bc,
+        #3b2552,
+        #241d47,
+        #1d1d1d,
+        #3b4252,
+        #21222c,
+        #32302f,
+        #24283b,
+        #ffe3e0,
+        #0a0a0a,
+        #122a30,
+        #3a1e17,
+        #173324,
+        #ffe4ea,
+        #181825
+    ];
+    property <[color]> p-ribbon: [
+        #262626,
+        #fbfbfb,
+        #262626,
+        #dce0e8,
+        #232634,
+        #181926,
+        #11111b,
+        #1f1f1f,
+        #fafafa,
+        #192131,
+        #fff9e6,
+        #f1fff8,
+        #f7f7e3,
+        #40295c,
+        #1d183c,
+        #181818,
+        #353b49,
+        #242532,
+        #2d2b29,
+        #1f2130,
+        #fff8f7,
+        #050505,
+        #10252b,
+        #301913,
+        #122a1e,
+        #fffafc,
+        #11111b
+    ];
+    property <[color]> p-sidebar: [
+        #232323,
+        #f7f8fa,
+        #232323,
+        #e6e9ef,
+        #292c3c,
+        #1e2030,
+        #181825,
+        #242424,
+        #f5f5f5,
+        #222b3d,
+        #f7e9b8,
+        #d4f3e2,
+        #dfe0bc,
+        #3b2552,
+        #241d47,
+        #1d1d1d,
+        #3b4252,
+        #21222c,
+        #32302f,
+        #24283b,
+        #ffe3e0,
+        #0a0a0a,
+        #122a30,
+        #3a1e17,
+        #173324,
+        #ffe4ea,
+        #181825
+    ];
+    property <[color]> p-field: [
+        #2a2a2a,
+        #ffffff,
+        #2a2a2a,
+        #ccd0da,
+        #414559,
+        #363a4f,
+        #313244,
+        #2d2d2d,
+        #ffffff,
+        #2a3550,
+        #fff0bf,
+        #ddf7e9,
+        #e7e8c9,
+        #553a73,
+        #2c2454,
+        #272727,
+        #434c5e,
+        #343746,
+        #3c3836,
+        #292e42,
+        #ffeae7,
+        #121212,
+        #17363d,
+        #48271d,
+        #1f402e,
+        #ffeaf0,
+        #313244
+    ];
+    property <[color]> p-accent: [
+        #3b9eef,
+        #0078d7,
+        #3b9eef,
+        #8839ef,
+        #ca9ee6,
+        #c6a0f6,
+        #cba6f7,
+        #f2f2f2,
+        #101010,
+        #2f80ff,
+        #c98c17,
+        #2fb98a,
+        #8a8b2a,
+        #b388ff,
+        #a78bfa,
+        #8ab4f8,
+        #88c0d0,
+        #bd93f9,
+        #fabd2f,
+        #7aa2f7,
+        #c65252,
+        #f5f5f5,
+        #2dd4bf,
+        #ff8a5c,
+        #81c784,
+        #d85c85,
+        #cba6f7
+    ];
+    property <[color]> p-text: [
+        #e6e6e6,
+        #1f1f1f,
+        #e6e6e6,
+        #4c4f69,
+        #c6d0f5,
+        #cad3f5,
+        #cdd6f4,
+        #ffffff,
+        #111111,
+        #e8eefc,
+        #4a3b1f,
+        #1d4437,
+        #3c3d1f,
+        #f0e6ff,
+        #e8e2ff,
+        #e8eaed,
+        #eceff4,
+        #f8f8f2,
+        #ebdbb2,
+        #c0caf5,
+        #4a2e2e,
+        #ffffff,
+        #d7f5ef,
+        #ffe6d8,
+        #dcf5e3,
+        #4a2f3a,
+        #cdd6f4
+    ];
+    property <[color]> p-text2: [
+        #b5b5b5,
+        #4a4a4a,
+        #b5b5b5,
+        #5c5f77,
+        #b5bfe2,
+        #b8c0e0,
+        #bac2de,
+        #d4d4d4,
+        #4a4a4a,
+        #b9c6e6,
+        #6b5734,
+        #3e6b5a,
+        #5d5e37,
+        #d3bff0,
+        #bdb2e8,
+        #bdc1c6,
+        #d8dee9,
+        #d3d5df,
+        #d5c4a1,
+        #a9b1d6,
+        #7a5555,
+        #cccccc,
+        #a8d8cf,
+        #e0b6a3,
+        #a9d6b8,
+        #7a5563,
+        #bac2de
+    ];
+    property <[color]> p-border: [
+        #4a4a4a,
+        #d6d6d6,
+        #4a4a4a,
+        #acb0be,
+        #626880,
+        #5b6078,
+        #585b70,
+        #4d4d4d,
+        #c8c8c8,
+        #3c4d70,
+        #d8c48a,
+        #a8ddc6,
+        #b9ba8a,
+        #6d5090,
+        #3d3268,
+        #3c4043,
+        #4c566a,
+        #44475a,
+        #504945,
+        #3b4261,
+        #e8bdb8,
+        #2a2a2a,
+        #24545c,
+        #6b3b2b,
+        #2c5a3e,
+        #ecc3d0,
+        #585b70
+    ];
+    property <[color]> p-mono: [
+        #d0d0d0,
+        #00000000,
+        #d0d0d0,
+        #00000000,
+        #c6d0f5,
+        #cad3f5,
+        #cdd6f4,
+        #ffffff,
+        #00000000,
+        #d7e3ff,
+        #00000000,
+        #00000000,
+        #00000000,
+        #f0e6ff,
+        #e8e2ff,
+        #e8eaed,
+        #eceff4,
+        #f8f8f2,
+        #ebdbb2,
+        #c0caf5,
+        #00000000,
+        #ffffff,
+        #d7f5ef,
+        #ffe6d8,
+        #dcf5e3,
+        #00000000,
+        #cdd6f4
+    ];
+    property <[string]> p-label: [
+        "Follow system",
+        "Light",
+        "Dark",
+        "Catppuccin Latte",
+        "Catppuccin Frappé",
+        "Catppuccin Macchiato",
+        "Catppuccin Mocha",
+        "White on dark",
+        "Black on light",
+        "Blue accent",
+        "Butter Cream",
+        "Mint Cream",
+        "Olive Grove",
+        "Violet Grid",
+        "Violet Night",
+        "Android 13",
+        "Nord",
+        "Dracula",
+        "Gruvbox",
+        "Tokyo Night",
+        "Rosé",
+        "Amoled Black",
+        "Ocean Teal",
+        "Sunset",
+        "Forest",
+        "Sakura",
+        "Custom colours"
+    ];
+    property <[bool]> p-dark: [
+        true,
+        false,
+        true,
+        false,
+        true,
+        true,
+        true,
+        true,
+        false,
+        true,
+        false,
+        false,
+        false,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        false,
+        true,
+        true,
+        true,
+        true,
+        false,
+        true
+    ];
+    property <[color]> p-dot1: [
+        #3b9eef,
+        #0078d7,
+        #3b9eef,
+        #8839ef,
+        #ca9ee6,
+        #c6a0f6,
+        #cba6f7,
+        #f2f2f2,
+        #101010,
+        #2f80ff,
+        #c98c17,
+        #2fb98a,
+        #8a8b2a,
+        #b388ff,
+        #a78bfa,
+        #8ab4f8,
+        #88c0d0,
+        #bd93f9,
+        #fabd2f,
+        #7aa2f7,
+        #c65252,
+        #f5f5f5,
+        #2dd4bf,
+        #ff8a5c,
+        #81c784,
+        #d85c85,
+        #cba6f7
+    ];
+    property <[color]> p-dot2: [
+        #3b9eef,
+        #0078d7,
+        #3b9eef,
+        #1e66f5,
+        #8caaee,
+        #8aadf4,
+        #89b4fa,
+        #8ab4f8,
+        #4269b8,
+        #61dafb,
+        #e0a92e,
+        #62c9ad,
+        #a9ab4f,
+        #8f7ad6,
+        #7c6bd6,
+        #81c995,
+        #a3be8c,
+        #50fa7b,
+        #b8bb26,
+        #bb9af7,
+        #e57373,
+        #8ab4f8,
+        #5ab4c8,
+        #ffca6c,
+        #aed581,
+        #ec7096,
+        #89b4fa
+    ];
+    property <[color]> p-dot3: [
+        #1f1f1f,
+        #ffffff,
+        #1f1f1f,
+        #eff1f5,
+        #303446,
+        #24273a,
+        #1e1e2e,
+        #1b1b1b,
+        #ffffff,
+        #1c2333,
+        #fff6d8,
+        #eafff3,
+        #f1f1d9,
+        #4a2f66,
+        #1a1533,
+        #121212,
+        #2e3440,
+        #282a36,
+        #282828,
+        #1a1b26,
+        #fff2f0,
+        #000000,
+        #0e1f24,
+        #2a1510,
+        #0f2118,
+        #fff5f7,
+        #1e1e2e
+    ];
+    property <[color]> p-dot4: [
+        #e6e6e6,
+        #1f1f1f,
+        #e6e6e6,
+        #4c4f69,
+        #c6d0f5,
+        #cad3f5,
+        #cdd6f4,
+        #ffffff,
+        #111111,
+        #e8eefc,
+        #4a3b1f,
+        #1d4437,
+        #3c3d1f,
+        #f0e6ff,
+        #e8e2ff,
+        #e8eaed,
+        #eceff4,
+        #f8f8f2,
+        #ebdbb2,
+        #c0caf5,
+        #4a2e2e,
+        #ffffff,
+        #d7f5ef,
+        #ffe6d8,
+        #dcf5e3,
+        #4a2f3a,
+        #cdd6f4
+    ];
+    out property <[ThemePreference]> presets: [
+        ThemePreference.system,
+        ThemePreference.light,
+        ThemePreference.dark,
+        ThemePreference.latte,
+        ThemePreference.frappe,
+        ThemePreference.macchiato,
+        ThemePreference.mocha,
+        ThemePreference.whiteDark,
+        ThemePreference.blackLight,
+        ThemePreference.blueAccent,
+        ThemePreference.butterCream,
+        ThemePreference.mintCream,
+        ThemePreference.oliveGrove,
+        ThemePreference.violetGrid,
+        ThemePreference.violetNight,
+        ThemePreference.android13,
+        ThemePreference.nord,
+        ThemePreference.dracula,
+        ThemePreference.gruvbox,
+        ThemePreference.tokyoNight,
+        ThemePreference.rose,
+        ThemePreference.amoledBlack,
+        ThemePreference.oceanTeal,
+        ThemePreference.sunset,
+        ThemePreference.forest,
+        ThemePreference.sakura,
+        ThemePreference.custom
+    ];
 
-    out property <brush> ribbon-bg:
-        is-latte ? #dce0e8
-        : is-frappe ? #232634
-        : is-macchiato ? #181926
-        : is-mocha ? #11111b
-        : dark ? #262626 : #fbfbfb;
+    public pure function preset-index(p: ThemePreference) -> int {
+        if (p == ThemePreference.system) { return 0; }
+        if (p == ThemePreference.light) { return 1; }
+        if (p == ThemePreference.dark) { return 2; }
+        if (p == ThemePreference.latte) { return 3; }
+        if (p == ThemePreference.frappe) { return 4; }
+        if (p == ThemePreference.macchiato) { return 5; }
+        if (p == ThemePreference.mocha) { return 6; }
+        if (p == ThemePreference.whiteDark) { return 7; }
+        if (p == ThemePreference.blackLight) { return 8; }
+        if (p == ThemePreference.blueAccent) { return 9; }
+        if (p == ThemePreference.butterCream) { return 10; }
+        if (p == ThemePreference.mintCream) { return 11; }
+        if (p == ThemePreference.oliveGrove) { return 12; }
+        if (p == ThemePreference.violetGrid) { return 13; }
+        if (p == ThemePreference.violetNight) { return 14; }
+        if (p == ThemePreference.android13) { return 15; }
+        if (p == ThemePreference.nord) { return 16; }
+        if (p == ThemePreference.dracula) { return 17; }
+        if (p == ThemePreference.gruvbox) { return 18; }
+        if (p == ThemePreference.tokyoNight) { return 19; }
+        if (p == ThemePreference.rose) { return 20; }
+        if (p == ThemePreference.amoledBlack) { return 21; }
+        if (p == ThemePreference.oceanTeal) { return 22; }
+        if (p == ThemePreference.sunset) { return 23; }
+        if (p == ThemePreference.forest) { return 24; }
+        if (p == ThemePreference.sakura) { return 25; }
+        if (p == ThemePreference.custom) { return 26; }
+        return 26;
+    }
+    public pure function dot1(p: ThemePreference) -> color { return p-dot1[preset-index(p)]; }
+    public pure function dot2(p: ThemePreference) -> color { return p-dot2[preset-index(p)]; }
+    public pure function dot3(p: ThemePreference) -> color { return p-dot3[preset-index(p)]; }
+    public pure function dot4(p: ThemePreference) -> color { return p-dot4[preset-index(p)]; }
+    public pure function preset-label(p: ThemePreference) -> string { return p-label[preset-index(p)]; }
 
-    out property <brush> sidebar-bg:
-        is-latte ? #e6e9ef
-        : is-frappe ? #292c3c
-        : is-macchiato ? #1e2030
-        : is-mocha ? #181825
-        : dark ? #232323 : #f7f8fa;
+    out property <bool> dark: root.preference == ThemePreference.system
+        ? root.system-dark : p-dark[root.idx];
+    out property <bool> is-catppuccin: root.preference == ThemePreference.latte
+        || root.preference == ThemePreference.frappe
+        || root.preference == ThemePreference.macchiato
+        || root.preference == ThemePreference.mocha;
 
-    out property <brush> status-bg:
-        is-latte ? #e6e9ef
-        : is-frappe ? #292c3c
-        : is-macchiato ? #1e2030
-        : is-mocha ? #181825
-        : dark ? #2b2b2b : #f5f5f5;
-
-    out property <brush> field-bg:
-        is-latte ? #ccd0da
-        : is-frappe ? #414559
-        : is-macchiato ? #363a4f
-        : is-mocha ? #313244
-        : dark ? #2a2a2a : #ffffff;
-
-    out property <brush> menu-bg:
-        is-latte ? #eff1f5
-        : is-frappe ? #303446
-        : is-macchiato ? #24273a
-        : is-mocha ? #1e1e2e
-        : dark ? #2b2b2b : #ffffff;
-
-    // ── lines ──
-    out property <brush> separator:
-        is-latte ? #bcc0cc
-        : is-frappe ? #51576d
-        : is-macchiato ? #494d64
-        : is-mocha ? #45475a
-        : dark ? #3a3a3a : #e3e3e3;
-
-    out property <brush> field-border:
-        is-latte ? #acb0be
-        : is-frappe ? #626880
-        : is-macchiato ? #5b6078
-        : is-mocha ? #585b70
-        : dark ? #4a4a4a : #d6d6d6;
-
-    // ── text ──
-    out property <brush> text:
-        is-latte ? #4c4f69
-        : is-frappe ? #c6d0f5
-        : is-macchiato ? #cad3f5
-        : is-mocha ? #cdd6f4
-        : dark ? #e6e6e6 : #1f1f1f;
-
-    out property <brush> text-secondary:
-        is-latte ? #5c5f77
-        : is-frappe ? #b5bfe2
-        : is-macchiato ? #b8c0e0
-        : is-mocha ? #bac2de
-        : dark ? #b5b5b5 : #4a4a4a;
-
-    out property <brush> text-muted:
-        is-latte ? #8c8fa1
-        : is-frappe ? #838ba7
-        : is-macchiato ? #8087a2
-        : is-mocha ? #7f849c
-        : dark ? #8f8f8f : #777777;
-
-    // ── interaction ──
-    out property <brush> hover:
-        is-latte ? #bcc0cc
-        : is-frappe ? #51576d
-        : is-macchiato ? #494d64
-        : is-mocha ? #45475a
-        : dark ? #2f3d4a : #e5f3fb;
-
-    out property <brush> hover-soft:
-        is-latte ? #ccd0da
-        : is-frappe ? #414559
-        : is-macchiato ? #363a4f
-        : is-mocha ? #313244
-        : dark ? #2a3036 : #eef4f9;
-
-    out property <brush> card-hover:
-        is-latte ? #bcc0cc
-        : is-frappe ? #51576d
-        : is-macchiato ? #494d64
-        : is-mocha ? #45475a
-        : dark ? #2b3641 : #eaf5fd;
-
-    out property <brush> hover-border:
-        is-latte ? #8839ef
-        : is-frappe ? #ca9ee6
-        : is-macchiato ? #c6a0f6
-        : is-mocha ? #cba6f7
-        : dark ? #3f6180 : #aedaf3;
-
-    out property <brush> selected:
-        is-latte ? #bcc0cc
-        : is-frappe ? #51576d
-        : is-macchiato ? #494d64
-        : is-mocha ? #45475a
-        : dark ? #26384a : #e5f1fb;
-
-    out property <brush> accent:
-        is-latte ? #8839ef
-        : is-frappe ? #ca9ee6
-        : is-macchiato ? #c6a0f6
-        : is-mocha ? #cba6f7
-        : dark ? #3b9eef : #0078d7;
-
-    // ── usage bar ──
-    out property <brush> bar-track:
-        is-latte ? #acb0be
-        : is-frappe ? #626880
-        : is-macchiato ? #5b6078
-        : is-mocha ? #585b70
-        : dark ? #3a3a3a : #e6e6e6;
-
-    out property <brush> bar-border:
-        is-latte ? #9ca0b0
-        : is-frappe ? #737994
-        : is-macchiato ? #6e738d
-        : is-mocha ? #6c7086
-        : dark ? #5a5a5a : #bcbcbc;
-
-    out property <brush> bar-fill:
-        is-latte ? #8839ef
-        : is-frappe ? #ca9ee6
-        : is-macchiato ? #c6a0f6
-        : is-mocha ? #cba6f7
-        : #26a0da;
-
-    out property <brush> bar-full:
-        is-latte ? #d20f39
-        : is-frappe ? #e78284
-        : is-macchiato ? #ed8796
-        : is-mocha ? #f38ba8
-        : #da3b3b;
-
-    // dark monochrome icons (arrows, chevrons, search...) are repainted light
-    out property <brush> mono-tint:
-        is-latte ? transparent
-        : is-frappe ? #c6d0f5
-        : is-macchiato ? #cad3f5
-        : is-mocha ? #cdd6f4
-        : dark ? #d0d0d0 : transparent;
+    out property <brush> tabs-bg: root.preference == ThemePreference.system
+        ? (root.system-dark ? #2b2b2b : #f2f2f2)
+        : (root.idx == 26 ? root.custom-sidebar : p-tabs[root.idx]);
+    out property <brush> status-bg: root.preference == ThemePreference.system
+        ? (root.system-dark ? #2b2b2b : #f2f2f2)
+        : (root.idx == 26 ? root.custom-sidebar : p-tabs[root.idx]);
+    out property <brush> ribbon-bg: root.preference == ThemePreference.system
+        ? (root.system-dark ? #262626 : #fbfbfb)
+        : (root.idx == 26 ? root.custom-ribbon : p-ribbon[root.idx]);
+    out property <brush> sidebar-bg: root.preference == ThemePreference.system
+        ? (root.system-dark ? #232323 : #f7f8fa)
+        : (root.idx == 26 ? root.custom-sidebar : p-sidebar[root.idx]);
+    out property <brush> field-bg: root.preference == ThemePreference.system
+        ? (root.system-dark ? #2a2a2a : #ffffff)
+        : (root.idx == 26 ? root.custom-field : p-field[root.idx]);
+    out property <brush> menu-bg: root.preference == ThemePreference.system
+        ? (root.system-dark ? #1f1f1f : #ffffff)
+        : (root.idx == 26 ? root.custom-bg : p-bg[root.idx]);
+    out property <brush> separator: root.preference == ThemePreference.system
+        ? (root.system-dark ? #4a4a4a : #d6d6d6)
+        : (root.idx == 26 ? root.custom-border : p-border[root.idx]);
+    out property <brush> field-border: root.preference == ThemePreference.system
+        ? (root.system-dark ? #4a4a4a : #d6d6d6)
+        : (root.idx == 26 ? root.custom-border : p-border[root.idx]);
+    out property <brush> text: root.preference == ThemePreference.system
+        ? (root.system-dark ? #e6e6e6 : #1f1f1f)
+        : (root.idx == 26 ? root.custom-text : p-text[root.idx]);
+    out property <brush> text-secondary: root.preference == ThemePreference.system
+        ? (root.system-dark ? #b5b5b5 : #4a4a4a)
+        : (root.idx == 26 ? root.custom-text-secondary : p-text2[root.idx]);
+    out property <brush> text-muted: root.preference == ThemePreference.system
+        ? (root.system-dark ? #b5b5b5 : #4a4a4a)
+        : (root.idx == 26 ? root.custom-text-secondary : p-text2[root.idx]);
+    out property <brush> hover: root.preference == ThemePreference.system
+        ? (root.system-dark ? #2a2a2a : #ffffff)
+        : (root.idx == 26 ? root.custom-field : p-field[root.idx]);
+    out property <brush> hover-soft: root.preference == ThemePreference.system
+        ? (root.system-dark ? #2a2a2a : #ffffff)
+        : (root.idx == 26 ? root.custom-field : p-field[root.idx]);
+    out property <brush> card-hover: root.preference == ThemePreference.system
+        ? (root.system-dark ? #2a2a2a : #ffffff)
+        : (root.idx == 26 ? root.custom-field : p-field[root.idx]);
+    out property <brush> hover-border: root.preference == ThemePreference.system
+        ? (root.system-dark ? #3b9eef : #0078d7)
+        : (root.idx == 26 ? root.custom-accent : p-accent[root.idx]);
+    out property <brush> selected: root.preference == ThemePreference.system
+        ? (root.system-dark ? #2a2a2a : #ffffff)
+        : (root.idx == 26 ? root.custom-field : p-field[root.idx]);
+    out property <brush> accent: root.preference == ThemePreference.system
+        ? (root.system-dark ? #3b9eef : #0078d7)
+        : (root.idx == 26 ? root.custom-accent : p-accent[root.idx]);
+    out property <brush> bar-track: root.preference == ThemePreference.system
+        ? (root.system-dark ? #4a4a4a : #d6d6d6)
+        : (root.idx == 26 ? root.custom-border : p-border[root.idx]);
+    out property <brush> bar-border: root.preference == ThemePreference.system
+        ? (root.system-dark ? #4a4a4a : #d6d6d6)
+        : (root.idx == 26 ? root.custom-border : p-border[root.idx]);
+    out property <brush> bar-fill: root.preference == ThemePreference.system
+        ? (root.system-dark ? #3b9eef : #0078d7)
+        : (root.idx == 26 ? root.custom-accent : p-accent[root.idx]);
+    out property <brush> bar-full: root.preference == ThemePreference.system
+        ? (root.system-dark ? #3b9eef : #0078d7)
+        : (root.idx == 26 ? root.custom-accent : p-accent[root.idx]);
+    out property <brush> mono-tint: root.preference == ThemePreference.system
+        ? (root.system-dark ? #d0d0d0 : #00000000)
+        : (root.idx == 26 ? root.custom-icon-tint : p-mono[root.idx]);
+    out property <brush> bg: root.preference == ThemePreference.system
+        ? (root.system-dark ? #1f1f1f : #ffffff)
+        : (root.idx == 26 ? root.custom-bg : p-bg[root.idx]);
 }
