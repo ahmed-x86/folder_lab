@@ -10,8 +10,8 @@ export component ContentPane inherits Rectangle {
     background: Theme.bg;
 
     VerticalLayout {
-        padding-left: 20px;
-        padding-right: 20px;
+        padding-left: 14px;
+        padding-right: 14px;
         padding-top: 14px;
         padding-bottom: 14px;
         spacing: 10px;
@@ -36,7 +36,7 @@ export component ContentPane inherits Rectangle {
         }
 
         FlexboxLayout {
-            spacing: 10px;
+            spacing: 8px;
 
             for disk[i] in root.disks : DriveCard {
                 disk: disk;
