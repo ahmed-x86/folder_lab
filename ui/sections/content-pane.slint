@@ -2,19 +2,159 @@ import { Theme } from "../theme.slint";
 import { Glyph } from "../components/glyph.slint";
 import { DriveCard } from "../components/drive-card.slint";
 import { FileCard } from "../components/file-card.slint";
-import { DiskInfo, FileEntry, BrowseState } from "../types.slint";
+import { DiskInfo, FileEntry, BrowseState, ViewMode, SortField, SortOrder } from "../types.slint";
 import { ScrollView } from "std-widgets.slint";
+
+component DetailsHeaderCell inherits Rectangle {
+    in property <string> title;
+    in property <bool> active: false;
+    in property <SortOrder> order: SortOrder.Ascending;
+    in property <length> col-width;
+    callback clicked();
+
+    width: root.col-width;
+    height: 28px;
+    background: touch.has-hover ? Theme.hover : transparent;
+
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        spacing: 4px;
+        alignment: start;
+
+        Text {
+            text: root.title;
+            font-size: 11px;
+            font-weight: 600;
+            color: root.active ? Theme.accent : Theme.text-secondary;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+
+        if root.active : Glyph {
+            source: root.order == SortOrder.Ascending
+                ? @image-url("../icons/chevron-down.svg")
+                : @image-url("../icons/arrow-up.svg");
+            icon-size: 10px;
+            tint: Theme.accent;
+        }
+    }
+
+    touch := TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+component DetailsRow inherits Rectangle {
+    in property <FileEntry> entry;
+    in property <bool> selected: false;
+    callback clicked();
+    callback double-clicked();
+
+    height: 28px;
+    border-radius: 3px;
+    background: root.selected
+        ? Theme.selected
+        : (touch.has-hover ? Theme.card-hover : transparent);
+    border-width: 1px;
+    border-color: root.selected ? Theme.accent.with-alpha(0.5) : transparent;
+
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        spacing: 12px;
+        alignment: start;
+
+        // Name with icon
+        HorizontalLayout {
+            width: 260px;
+            spacing: 8px;
+            alignment: start;
+
+            Image {
+                source: root.entry.is-dir
+                    ? @image-url("../icons/folder.svg")
+                    : @image-url("../icons/file.svg");
+                width: 16px;
+                height: 16px;
+                image-fit: ImageFit.contain;
+                vertical-alignment: center;
+            }
+
+            Text {
+                text: root.entry.name;
+                font-size: 11px;
+                color: Theme.text;
+                vertical-alignment: center;
+                overflow: elide;
+                horizontal-stretch: 1;
+            }
+        }
+
+        // Date modified
+        Text {
+            width: 140px;
+            text: root.entry.date-modified;
+            font-size: 11px;
+            color: Theme.text-secondary;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+
+        // Type
+        Text {
+            width: 140px;
+            text: root.entry.file-type;
+            font-size: 11px;
+            color: Theme.text-secondary;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+
+        // Size
+        Text {
+            width: 80px;
+            text: root.entry.size;
+            font-size: 11px;
+            color: Theme.text-secondary;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
+
+    touch := TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.clicked(); }
+        double-clicked => { root.double-clicked(); }
+    }
+}
 
 export component ContentPane inherits Rectangle {
     in property <[DiskInfo]> disks;
     in property <[FileEntry]> files;
     in property <BrowseState> browse-state: BrowseState.Home;
+    in-out property <ViewMode> view-mode: ViewMode.Grid;
+    in-out property <SortField> sort-field: SortField.Name;
+    in-out property <SortOrder> sort-order: SortOrder.Ascending;
     in-out property <int> selected-index: -1;
 
     callback navigate-to(string);
     callback key-nav(string);
     callback navigate-arrows(int);
     callback activate-selected();
+    callback sort-requested(SortField);
+    callback go-back();
+    callback go-forward();
+    callback go-up();
+    callback refresh();
+    callback toggle-hidden();
+    callback new-folder();
+    callback delete();
+    callback copy();
+    callback cut();
+    callback paste();
+    callback toggle-details();
 
     horizontal-stretch: 1;
     background: Theme.bg;
@@ -38,8 +178,8 @@ export component ContentPane inherits Rectangle {
     property <length> h-pad: max(14px, floor((root.avail-w - root.grid-w) / 2px) * 1px);
 
     // Selected item position for auto-scroll
-    property <int> sel-row: root.selected-index >= 0 ? floor(root.selected-index / root.cols) : -1;
-    property <length> sel-y: root.sel-row >= 0 ? 14px + root.sel-row * (root.item-height + root.item-spacing) : 0px;
+    property <int> sel-row: root.selected-index >= 0 ? (root.view-mode == ViewMode.Grid ? floor(root.selected-index / root.cols) : root.selected-index) : -1;
+    property <length> sel-y: root.sel-row >= 0 ? (root.view-mode == ViewMode.Grid ? 14px + root.sel-row * (root.item-height + root.item-spacing) : 32px + root.sel-row * 28px) : 0px;
 
     public function focus-pane() {
         fs.focus();
@@ -49,8 +189,8 @@ export component ContentPane inherits Rectangle {
         if (root.sel-row >= 0) {
             if (root.sel-y < -scroll.content-y) {
                 scroll.content-y = min(0px, -root.sel-y + 14px);
-            } else if (root.sel-y + root.item-height > -scroll.content-y + scroll.visible-height) {
-                scroll.content-y = min(0px, -(root.sel-y + root.item-height - scroll.visible-height + 14px));
+            } else if (root.sel-y + 30px > -scroll.content-y + scroll.visible-height) {
+                scroll.content-y = min(0px, -(root.sel-y + 30px - scroll.visible-height + 14px));
             }
         }
     }
@@ -70,16 +210,93 @@ export component ContentPane inherits Rectangle {
         }
 
         key-pressed(ev) => {
+            // Shortcuts with Alt
+            if (ev.modifiers.alt) {
+                if (ev.text == Key.LeftArrow) {
+                    root.go-back();
+                    return accept;
+                }
+                if (ev.text == Key.RightArrow) {
+                    root.go-forward();
+                    return accept;
+                }
+                if (ev.text == Key.UpArrow) {
+                    root.go-up();
+                    return accept;
+                }
+                if (ev.text == "p" || ev.text == "P") {
+                    root.toggle-details();
+                    return accept;
+                }
+            }
+
+            // Shortcuts with Control
+            if (ev.modifiers.control) {
+                if (ev.modifiers.shift && (ev.text == "n" || ev.text == "N")) {
+                    root.new-folder();
+                    return accept;
+                }
+                if (ev.text == "h" || ev.text == "H") {
+                    root.toggle-hidden();
+                    return accept;
+                }
+                if (ev.text == "r" || ev.text == "R") {
+                    root.refresh();
+                    return accept;
+                }
+                if (ev.text == "c" || ev.text == "C") {
+                    root.copy();
+                    return accept;
+                }
+                if (ev.text == "x" || ev.text == "X") {
+                    root.cut();
+                    return accept;
+                }
+                if (ev.text == "v" || ev.text == "V") {
+                    root.paste();
+                    return accept;
+                }
+                if (ev.text == "1") {
+                    root.view-mode = ViewMode.Grid;
+                    return accept;
+                }
+                if (ev.text == "2") {
+                    root.view-mode = ViewMode.Details;
+                    return accept;
+                }
+                if (ev.text == "d" || ev.text == "D") {
+                    root.toggle-details();
+                    return accept;
+                }
+            }
+
+            // Function & Navigation keys
+            if (ev.text == Key.F5) {
+                root.refresh();
+                return accept;
+            }
+            if (ev.text == Key.Delete) {
+                root.delete();
+                return accept;
+            }
+            if (ev.text == Key.Backspace) {
+                root.go-back();
+                return accept;
+            }
+            if (ev.text == Key.Escape) {
+                root.selected-index = -1;
+                return accept;
+            }
             if (ev.text == Key.Return) {
                 root.activate-selected();
                 return accept;
             }
             if (ev.text == Key.UpArrow) {
-                root.navigate-arrows(-root.cols);
+                root.navigate-arrows(root.view-mode == ViewMode.Grid ? -root.cols : -1);
                 return accept;
             }
             if (ev.text == Key.DownArrow) {
-                root.navigate-arrows(root.cols);
+                root.navigate-arrows(root.view-mode == ViewMode.Grid ? root.cols : 1);
                 return accept;
             }
             if (ev.text == Key.LeftArrow) {
@@ -90,7 +307,9 @@ export component ContentPane inherits Rectangle {
                 root.navigate-arrows(1);
                 return accept;
             }
-            if (ev.text != "") {
+
+            // Fast letter search
+            if (ev.text != "" && !ev.modifiers.control && !ev.modifiers.alt) {
                 root.key-nav(ev.text);
                 return accept;
             }
@@ -148,8 +367,8 @@ export component ContentPane inherits Rectangle {
                 Rectangle { }
             }
 
-            // ── DIRECTORY: show files and folders with centered margins ───────
-            if root.browse-state == BrowseState.Directory : TouchArea {
+            // ── DIRECTORY: Grid view ─────────────────────────────────────────
+            if root.browse-state == BrowseState.Directory && root.view-mode == ViewMode.Grid : TouchArea {
                 clicked => {
                     root.selected-index = -1;
                     fs.focus();
@@ -166,6 +385,83 @@ export component ContentPane inherits Rectangle {
                     padding-bottom: 14px;
 
                     for entry[i] in root.files : FileCard {
+                        entry: entry;
+                        selected: root.selected-index == i;
+                        clicked => {
+                            root.selected-index = i;
+                            fs.focus();
+                        }
+                        double-clicked => {
+                            if (entry.is-dir) {
+                                root.navigate-to(entry.name);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ── DIRECTORY: Details view (List matching Image 2) ──────────────
+            if root.browse-state == BrowseState.Directory && root.view-mode == ViewMode.Details : TouchArea {
+                clicked => {
+                    root.selected-index = -1;
+                    fs.focus();
+                }
+
+                VerticalLayout {
+                    padding-left: 14px;
+                    padding-right: 14px;
+                    padding-top: 8px;
+                    padding-bottom: 14px;
+                    spacing: 1px;
+
+                    // Header row
+                    HorizontalLayout {
+                        height: 28px;
+                        spacing: 12px;
+                        alignment: start;
+
+                        DetailsHeaderCell {
+                            title: "Name";
+                            col-width: 260px;
+                            active: root.sort-field == SortField.Name;
+                            order: root.sort-order;
+                            clicked => { root.sort-requested(SortField.Name); }
+                        }
+
+                        DetailsHeaderCell {
+                            title: "Date modified";
+                            col-width: 140px;
+                            active: root.sort-field == SortField.Date;
+                            order: root.sort-order;
+                            clicked => { root.sort-requested(SortField.Date); }
+                        }
+
+                        DetailsHeaderCell {
+                            title: "Type";
+                            col-width: 140px;
+                            active: root.sort-field == SortField.Type;
+                            order: root.sort-order;
+                            clicked => { root.sort-requested(SortField.Type); }
+                        }
+
+                        DetailsHeaderCell {
+                            title: "Size";
+                            col-width: 80px;
+                            active: root.sort-field == SortField.Size;
+                            order: root.sort-order;
+                            clicked => { root.sort-requested(SortField.Size); }
+                        }
+                    }
+
+                    Rectangle {
+                        height: 1px;
+                        background: Theme.separator;
+                    }
+
+                    Rectangle { height: 4px; }
+
+                    // Items rows
+                    for entry[i] in root.files : DetailsRow {
                         entry: entry;
                         selected: root.selected-index == i;
                         clicked => {
