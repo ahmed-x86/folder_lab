@@ -1,112 +1,181 @@
 import { Theme, ThemePreference } from "../theme.slint";
-import { RadioOption } from "../components/radio-option.slint";
 import { Glyph } from "../components/glyph.slint";
 
-component ThemeCard inherits Rectangle {
+// Preset card inspired by modern theme pickers (Title + 4 palette color dots)
+component ThemePresetCard inherits Rectangle {
     in property <string> label;
     in property <bool> checked;
-    in property <brush> preview-bg;
-    in property <brush> preview-sidebar;
-    in property <brush> preview-accent;
-    in property <brush> preview-text;
+    in property <color> dot1;
+    in property <color> dot2;
+    in property <color> dot3;
+    in property <color> dot4;
     callback clicked();
 
-    width: 110px;
-    height: 90px;
-    border-radius: 8px;
+    width: 200px;
+    height: 72px;
+    border-radius: 10px;
+    background: touch.has-hover ? Theme.hover : Theme.field-bg;
     border-width: root.checked ? 2px : 1px;
     border-color: root.checked ? Theme.accent : Theme.field-border;
-    background: Theme.field-bg;
     clip: true;
 
     VerticalLayout {
-        padding: 0;
-        spacing: 0;
+        padding-left: 14px;
+        padding-right: 14px;
+        padding-top: 10px;
+        padding-bottom: 10px;
+        spacing: 8px;
+        alignment: center;
 
-        // Mini preview
-        Rectangle {
-            height: 55px;
-            background: root.preview-bg;
-            clip: true;
+        HorizontalLayout {
+            spacing: 6px;
 
-            HorizontalLayout {
-                padding: 4px;
-                spacing: 2px;
+            Text {
+                text: root.label;
+                font-size: 12px;
+                font-weight: 600;
+                color: Theme.text;
+                horizontal-alignment: left;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+                overflow: elide;
+            }
 
-                // Sidebar
+            if root.checked : VerticalLayout {
+                alignment: center;
+                horizontal-stretch: 0;
+
                 Rectangle {
-                    width: 24px;
-                    background: root.preview-sidebar;
-                    border-radius: 2px;
+                    width: 14px;
+                    height: 14px;
+                    border-radius: 7px;
+                    background: Theme.accent;
 
-                    VerticalLayout {
-                        padding-top: 4px;
-                        spacing: 3px;
-                        alignment: start;
-
-                        Rectangle { height: 2px; width: 16px; background: root.preview-text; opacity: 0.3; }
-                        Rectangle { height: 2px; width: 14px; background: root.preview-text; opacity: 0.3; }
-                        Rectangle { height: 2px; width: 16px; background: root.preview-text; opacity: 0.3; }
+                    Rectangle {
+                        width: 6px;
+                        height: 6px;
+                        border-radius: 3px;
+                        background: #ffffff;
                     }
-                }
-
-                // Content area
-                VerticalLayout {
-                    horizontal-stretch: 1;
-                    padding: 4px;
-                    spacing: 3px;
-
-                    // Accent bar at top
-                    Rectangle { height: 3px; background: root.preview-accent; border-radius: 1px; }
-                    Rectangle { height: 2px; width: 60%; background: root.preview-text; opacity: 0.25; }
-                    Rectangle { height: 2px; width: 45%; background: root.preview-text; opacity: 0.25; }
-                    Rectangle { height: 2px; width: 55%; background: root.preview-text; opacity: 0.25; }
                 }
             }
         }
 
-        // Label
-        Rectangle {
-            height: 35px;
+        HorizontalLayout {
+            spacing: 8px;
+            alignment: start;
 
-            HorizontalLayout {
-                padding-left: 8px;
-                spacing: 6px;
+            Rectangle {
+                width: 16px;
+                height: 16px;
+                border-radius: 8px;
+                background: root.dot1;
+                border-width: 1px;
+                border-color: #00000030;
+            }
 
-                VerticalLayout {
-                    alignment: center;
-                    horizontal-stretch: 0;
-                    min-width: 14px;
-                    preferred-width: 14px;
-                    max-width: 14px;
+            Rectangle {
+                width: 16px;
+                height: 16px;
+                border-radius: 8px;
+                background: root.dot2;
+                border-width: 1px;
+                border-color: #00000030;
+            }
 
-                    Rectangle {
-                        height: 14px;
-                        border-radius: 7px;
-                        border-width: 2px;
-                        border-color: root.checked ? Theme.accent : Theme.text-muted;
+            Rectangle {
+                width: 16px;
+                height: 16px;
+                border-radius: 8px;
+                background: root.dot3;
+                border-width: 1px;
+                border-color: #00000030;
+            }
 
-                        if root.checked : Rectangle {
-                            width: 7px;
-                            height: 7px;
-                            border-radius: 3.5px;
-                            background: Theme.accent;
-                        }
-                    }
-                }
-
-                Text {
-                    text: root.label;
-                    font-size: 11px;
-                    color: Theme.text;
-                    vertical-alignment: center;
-                    overflow: elide;
-                }
+            Rectangle {
+                width: 16px;
+                height: 16px;
+                border-radius: 8px;
+                background: root.dot4;
+                border-width: 1px;
+                border-color: #00000030;
             }
         }
     }
 
-    TouchArea {
+    touch := TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+// Category item card on the main Settings page
+component SettingsCategoryCard inherits Rectangle {
+    in property <string> title;
+    in property <string> subtitle;
+    in property <image> icon;
+    callback clicked();
+
+    height: 64px;
+    max-width: 640px;
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: Theme.field-border;
+    background: touch.has-hover ? Theme.hover : Theme.field-bg;
+
+    HorizontalLayout {
+        padding-left: 16px;
+        padding-right: 16px;
+        spacing: 14px;
+
+        VerticalLayout {
+            alignment: center;
+            horizontal-stretch: 0;
+
+            Rectangle {
+                width: 36px;
+                height: 36px;
+                border-radius: 6px;
+                background: Theme.is-catppuccin ? #00000025 : #0000000c;
+
+                Glyph {
+                    source: root.icon;
+                    icon-size: 20px;
+                    tint: Theme.mono-tint;
+                }
+            }
+        }
+
+        VerticalLayout {
+            horizontal-stretch: 1;
+            alignment: center;
+            spacing: 2px;
+
+            Text {
+                text: root.title;
+                font-size: 13px;
+                font-weight: 600;
+                color: Theme.text;
+                horizontal-alignment: left;
+            }
+
+            Text {
+                text: root.subtitle;
+                font-size: 11px;
+                color: Theme.text-secondary;
+                horizontal-alignment: left;
+            }
+        }
+
+        Glyph {
+            source: @image-url("../icons/chevron-right.svg");
+            icon-size: 14px;
+            tint: Theme.mono-tint;
+            faded: 0.6;
+        }
+    }
+
+    touch := TouchArea {
         mouse-cursor: MouseCursor.pointer;
         clicked => { root.clicked(); }
     }
@@ -118,13 +187,16 @@ export component SettingsPage inherits Rectangle {
     callback theme-selected(ThemePreference);
     callback go-back();
 
+    // "" = Settings main menu, "theme" = Theme subpage
+    in-out property <string> current-subpage: "";
+
     VerticalLayout {
         padding: 0;
         spacing: 0;
 
-        // Header bar with back button
+        // Top Navigation Bar
         Rectangle {
-            height: 40px;
+            height: 44px;
             background: Theme.sidebar-bg;
 
             HorizontalLayout {
@@ -135,7 +207,7 @@ export component SettingsPage inherits Rectangle {
                 Rectangle {
                     width: 32px;
                     height: 32px;
-                    y: 4px;
+                    y: 6px;
                     border-radius: 4px;
                     background: back-touch.has-hover ? Theme.hover : transparent;
 
@@ -147,12 +219,18 @@ export component SettingsPage inherits Rectangle {
 
                     back-touch := TouchArea {
                         mouse-cursor: MouseCursor.pointer;
-                        clicked => { root.go-back(); }
+                        clicked => {
+                            if root.current-subpage == "theme" {
+                                root.current-subpage = "";
+                            } else {
+                                root.go-back();
+                            }
+                        }
                     }
                 }
 
                 Text {
-                    text: "Settings";
+                    text: root.current-subpage == "theme" ? "Theme" : "Settings";
                     font-size: 16px;
                     font-weight: 600;
                     color: Theme.text;
@@ -163,135 +241,171 @@ export component SettingsPage inherits Rectangle {
             }
         }
 
-        // Separator
+        // Separator below header
         Rectangle {
             height: 1px;
             background: Theme.separator;
         }
 
-        // Settings content
-        Flickable {
+        // VIEW 1: Main Settings Menu
+        if root.current-subpage == "" : Flickable {
             vertical-stretch: 1;
 
             VerticalLayout {
                 padding: 24px;
-                spacing: 24px;
+                spacing: 12px;
+                alignment: start;
 
-                // ── Standard themes ──
-                VerticalLayout {
-                    spacing: 12px;
-
-                    Text {
-                        text: "Theme";
-                        font-size: 14px;
-                        font-weight: 600;
-                        color: Theme.text;
-                    }
-
-                    HorizontalLayout {
-                        height: 28px;
-                        spacing: 12px;
-
-                        RadioOption {
-                            horizontal-stretch: 1;
-                            label: "Light";
-                            checked: Theme.preference == ThemePreference.light;
-                            clicked => {
-                                Theme.preference = ThemePreference.light;
-                                root.theme-selected(ThemePreference.light);
-                            }
-                        }
-
-                        RadioOption {
-                            horizontal-stretch: 1;
-                            label: "Dark";
-                            checked: Theme.preference == ThemePreference.dark;
-                            clicked => {
-                                Theme.preference = ThemePreference.dark;
-                                root.theme-selected(ThemePreference.dark);
-                            }
-                        }
-
-                        RadioOption {
-                            horizontal-stretch: 1;
-                            label: "Follow system";
-                            checked: Theme.preference == ThemePreference.system;
-                            clicked => {
-                                Theme.preference = ThemePreference.system;
-                                root.theme-selected(ThemePreference.system);
-                            }
-                        }
-                    }
+                Text {
+                    text: "Preferences";
+                    font-size: 14px;
+                    font-weight: 600;
+                    color: Theme.text;
                 }
 
-                // ── Catppuccin themes ──
-                VerticalLayout {
+                SettingsCategoryCard {
+                    title: "Theme";
+                    subtitle: "Personalize your colors and appearance presets";
+                    icon: @image-url("../icons/palette.svg");
+                    clicked => { root.current-subpage = "theme"; }
+                }
+
+                SettingsCategoryCard {
+                    title: "About Folder Lab";
+                    subtitle: "Version 0.1.0 • Built with Slint & Rust";
+                    icon: @image-url("../icons/pc.svg");
+                }
+
+                Rectangle { }
+            }
+        }
+
+        // VIEW 2: Theme Subpage (Presets Grid matching Image 2)
+        if root.current-subpage == "theme" : Flickable {
+            vertical-stretch: 1;
+
+            VerticalLayout {
+                padding: 24px;
+                spacing: 16px;
+                alignment: start;
+
+                Text {
+                    text: "Presets";
+                    font-size: 14px;
+                    font-weight: 600;
+                    color: Theme.text;
+                }
+
+                // Row 1: Follow system, Light, Dark
+                HorizontalLayout {
                     spacing: 12px;
 
-                    Text {
-                        text: "Catppuccin";
-                        font-size: 14px;
-                        font-weight: 600;
-                        color: Theme.text;
+                    ThemePresetCard {
+                        label: "Follow system";
+                        checked: Theme.preference == ThemePreference.system;
+                        dot1: #3b9eef;
+                        dot2: #2b2b2b;
+                        dot3: #ffffff;
+                        dot4: #8f8f8f;
+                        clicked => {
+                            Theme.preference = ThemePreference.system;
+                            root.theme-selected(ThemePreference.system);
+                        }
                     }
 
-                    HorizontalLayout {
-                        spacing: 12px;
-
-                        ThemeCard {
-                            label: "Latte";
-                            checked: Theme.preference == ThemePreference.latte;
-                            preview-bg: #eff1f5;
-                            preview-sidebar: #e6e9ef;
-                            preview-accent: #8839ef;
-                            preview-text: #4c4f69;
-                            clicked => {
-                                Theme.preference = ThemePreference.latte;
-                                root.theme-selected(ThemePreference.latte);
-                            }
+                    ThemePresetCard {
+                        label: "Light";
+                        checked: Theme.preference == ThemePreference.light;
+                        dot1: #0078d7;
+                        dot2: #ffffff;
+                        dot3: #f2f2f2;
+                        dot4: #1f1f1f;
+                        clicked => {
+                            Theme.preference = ThemePreference.light;
+                            root.theme-selected(ThemePreference.light);
                         }
-
-                        ThemeCard {
-                            label: "Frappé";
-                            checked: Theme.preference == ThemePreference.frappe;
-                            preview-bg: #303446;
-                            preview-sidebar: #292c3c;
-                            preview-accent: #ca9ee6;
-                            preview-text: #c6d0f5;
-                            clicked => {
-                                Theme.preference = ThemePreference.frappe;
-                                root.theme-selected(ThemePreference.frappe);
-                            }
-                        }
-
-                        ThemeCard {
-                            label: "Macchiato";
-                            checked: Theme.preference == ThemePreference.macchiato;
-                            preview-bg: #24273a;
-                            preview-sidebar: #1e2030;
-                            preview-accent: #c6a0f6;
-                            preview-text: #cad3f5;
-                            clicked => {
-                                Theme.preference = ThemePreference.macchiato;
-                                root.theme-selected(ThemePreference.macchiato);
-                            }
-                        }
-
-                        ThemeCard {
-                            label: "Mocha";
-                            checked: Theme.preference == ThemePreference.mocha;
-                            preview-bg: #1e1e2e;
-                            preview-sidebar: #181825;
-                            preview-accent: #cba6f7;
-                            preview-text: #cdd6f4;
-                            clicked => {
-                                Theme.preference = ThemePreference.mocha;
-                                root.theme-selected(ThemePreference.mocha);
-                            }
-                        }
-
-                        Rectangle { }
                     }
+
+                    ThemePresetCard {
+                        label: "Dark";
+                        checked: Theme.preference == ThemePreference.dark;
+                        dot1: #3b9eef;
+                        dot2: #1f1f1f;
+                        dot3: #2b2b2b;
+                        dot4: #e6e6e6;
+                        clicked => {
+                            Theme.preference = ThemePreference.dark;
+                            root.theme-selected(ThemePreference.dark);
+                        }
+                    }
+
+                    Rectangle { }
+                }
+
+                // Row 2: Catppuccin Latte, Frappé, Macchiato
+                HorizontalLayout {
+                    spacing: 12px;
+
+                    ThemePresetCard {
+                        label: "Catppuccin Latte";
+                        checked: Theme.preference == ThemePreference.latte;
+                        dot1: #8839ef;
+                        dot2: #1e66f5;
+                        dot3: #eff1f5;
+                        dot4: #4c4f69;
+                        clicked => {
+                            Theme.preference = ThemePreference.latte;
+                            root.theme-selected(ThemePreference.latte);
+                        }
+                    }
+
+                    ThemePresetCard {
+                        label: "Catppuccin Frappé";
+                        checked: Theme.preference == ThemePreference.frappe;
+                        dot1: #ca9ee6;
+                        dot2: #8caaee;
+                        dot3: #303446;
+                        dot4: #c6d0f5;
+                        clicked => {
+                            Theme.preference = ThemePreference.frappe;
+                            root.theme-selected(ThemePreference.frappe);
+                        }
+                    }
+
+                    ThemePresetCard {
+                        label: "Catppuccin Macchiato";
+                        checked: Theme.preference == ThemePreference.macchiato;
+                        dot1: #c6a0f6;
+                        dot2: #8aadf4;
+                        dot3: #24273a;
+                        dot4: #cad3f5;
+                        clicked => {
+                            Theme.preference = ThemePreference.macchiato;
+                            root.theme-selected(ThemePreference.macchiato);
+                        }
+                    }
+
+                    Rectangle { }
+                }
+
+                // Row 3: Catppuccin Mocha
+                HorizontalLayout {
+                    spacing: 12px;
+
+                    ThemePresetCard {
+                        label: "Catppuccin Mocha";
+                        checked: Theme.preference == ThemePreference.mocha;
+                        dot1: #cba6f7;
+                        dot2: #89b4fa;
+                        dot3: #1e1e2e;
+                        dot4: #cdd6f4;
+                        clicked => {
+                            Theme.preference = ThemePreference.mocha;
+                            root.theme-selected(ThemePreference.mocha);
+                        }
+                    }
+
+                    Rectangle { }
                 }
 
                 Rectangle { }
