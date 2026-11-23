@@ -1,4 +1,6 @@
 import { Theme } from "../theme.slint";
+import { Glyph } from "glyph.slint";
+
 export component IconButton inherits Rectangle {
     in property <image> icon;
     in property <bool> enabled: true;
@@ -9,12 +11,16 @@ export component IconButton inherits Rectangle {
     background: touch.has-hover && root.enabled ? Theme.hover : transparent;
     opacity: root.enabled ? 1.0 : 0.38;
 
-    Image {
-        source: root.icon;
-        width: 16px;
-        height: 16px;
-        image-fit: ImageFit.contain;
-        colorize: Theme.mono-tint;
+    // The icon must sit in the middle of the button. A layout wrapper is needed
+    // because a bare Image inside a Rectangle sticks to the top-left corner.
+    HorizontalLayout {
+        alignment: center;
+
+        Glyph {
+            source: root.icon;
+            icon-size: 16px;
+            tint: Theme.mono-tint;
+        }
     }
 
     touch := TouchArea {
