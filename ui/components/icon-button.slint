@@ -5,6 +5,8 @@ export component IconButton inherits Rectangle {
     in property <image> icon;
     in property <bool> enabled: true;
 
+    callback clicked();
+
     width: 26px;
     height: 26px;
     border-radius: 2px;
@@ -26,5 +28,6 @@ export component IconButton inherits Rectangle {
     touch := TouchArea {
         enabled: root.enabled;
         mouse-cursor: MouseCursor.pointer;
+        clicked => { root.clicked(); }
     }
 }
