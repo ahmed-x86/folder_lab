@@ -7,3 +7,22 @@ export struct DiskInfo {
     free: string,
     used: float,
 }
+
+export struct FileEntry {
+    name: string,
+    is-dir: bool,
+    // size string e.g. "1.2 MB" (empty for dirs)
+    size: string,
+}
+
+// What the content pane should display
+export enum BrowseState {
+    // Showing the disks/partitions home page
+    Home,
+    // Showing directory listing (files list in app)
+    Directory,
+    // Current path is not readable (permission denied)
+    NoPermission,
+    // Current path is an empty directory
+    Empty,
+}
