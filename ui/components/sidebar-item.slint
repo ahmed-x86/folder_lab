@@ -7,6 +7,8 @@ export component SidebarItem inherits Rectangle {
     in property <bool> selected: false;
     in property <bool> expandable: false;
 
+    callback clicked();
+
     height: 30px;
     background: root.selected ? Theme.selected : (touch.has-hover ? Theme.hover-soft : transparent);
 
@@ -47,5 +49,6 @@ export component SidebarItem inherits Rectangle {
 
     touch := TouchArea {
         mouse-cursor: MouseCursor.pointer;
+        clicked => { root.clicked(); }
     }
 }
