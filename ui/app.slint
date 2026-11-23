@@ -33,6 +33,9 @@ export component AppWindow inherits Window {
     // What the content pane should show
     in property <BrowseState> browse-state: BrowseState.Home;
 
+    // Currently selected file/folder index (-1 for none)
+    in-out property <int> selected-index: -1;
+
     // Navigation history
     in-out property <[string]> history: [];
     in-out property <int> history-index: -1;
@@ -49,6 +52,9 @@ export component AppWindow inherits Window {
     callback navigate-back();
     callback navigate-forward();
     callback navigate-home();
+    callback key-nav(string);
+    callback navigate-arrows(int);
+    callback activate-selected();
 
     // Can we go back/forward?
     in property <bool> can-go-back: false;
@@ -87,11 +93,15 @@ export component AppWindow inherits Window {
                 background: Theme.separator;
             }
 
-            ContentPane {
+            content-pane := ContentPane {
                 disks: root.disks;
                 files: root.files;
                 browse-state: root.browse-state;
+                selected-index <=> root.selected-index;
                 navigate-to(path) => { root.navigate-to(path); }
+                key-nav(ch) => { root.key-nav(ch); }
+                navigate-arrows(delta) => { root.navigate-arrows(delta); }
+                activate-selected => { root.activate-selected(); }
             }
         }
 
