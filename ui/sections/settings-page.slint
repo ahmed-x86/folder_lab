@@ -109,6 +109,78 @@ component ThemePresetCard inherits Rectangle {
     }
 }
 
+// A preset card wired to one of the themes in ThemePreference.
+component PresetCard inherits ThemePresetCard {
+    in property <ThemePreference> preset;
+    callback chosen(ThemePreference);
+
+    label: Theme.preset-label(root.preset);
+    checked: Theme.preference == root.preset;
+    dot1: Theme.dot1(root.preset);
+    dot2: Theme.dot2(root.preset);
+    dot3: Theme.dot3(root.preset);
+    dot4: Theme.dot4(root.preset);
+
+    clicked => {
+        Theme.preference = root.preset;
+        root.chosen(root.preset);
+    }
+}
+
+// One editable hex colour: label, live swatch, and a text field.
+component CustomColourField inherits Rectangle {
+    in property <string> label;
+    in property <string> hex;
+    in property <color> swatch;
+    callback changed(string);
+
+    height: 26px;
+
+    HorizontalLayout {
+        spacing: 10px;
+
+        Text {
+            text: root.label;
+            width: 170px;
+            font-size: 11px;
+            color: Theme.text;
+            vertical-alignment: center;
+            horizontal-alignment: right;
+        }
+
+        Rectangle {
+            width: 22px;
+            height: 18px;
+            border-radius: 3px;
+            border-width: 1px;
+            border-color: Theme.field-border;
+            background: root.swatch;
+        }
+
+        Rectangle {
+            horizontal-stretch: 1;
+            height: 24px;
+            border-radius: 4px;
+            border-width: 1px;
+            border-color: Theme.field-border;
+            background: Theme.field-bg;
+
+            VerticalLayout {
+                padding-left: 6px;
+                padding-right: 6px;
+                alignment: center;
+
+                TextInput {
+                    text: root.hex;
+                    font-size: 11px;
+                    color: Theme.text;
+                    edited => { root.changed(self.text); }
+                }
+            }
+        }
+    }
+}
+
 // Category item card on the main Settings page
 component SettingsCategoryCard inherits Rectangle {
     in property <string> title;
@@ -138,10 +210,14 @@ component SettingsCategoryCard inherits Rectangle {
                 border-radius: 6px;
                 background: Theme.is-catppuccin ? #00000025 : #0000000c;
 
-                Glyph {
-                    source: root.icon;
-                    icon-size: 20px;
-                    tint: Theme.mono-tint;
+                HorizontalLayout {
+                    alignment: center;
+
+                    Glyph {
+                        source: root.icon;
+                        icon-size: 20px;
+                        tint: Theme.mono-tint;
+                    }
                 }
             }
         }
@@ -185,6 +261,7 @@ export component SettingsPage inherits Rectangle {
     background: Theme.bg;
 
     callback theme-selected(ThemePreference);
+    callback custom-colors-changed();
     callback go-back();
 
     // "" = Settings main menu, "theme" = Theme subpage
@@ -211,10 +288,14 @@ export component SettingsPage inherits Rectangle {
                     border-radius: 4px;
                     background: back-touch.has-hover ? Theme.hover : transparent;
 
-                    Glyph {
-                        source: @image-url("../icons/arrow-left.svg");
-                        tint: Theme.mono-tint;
-                        icon-size: 16px;
+                    HorizontalLayout {
+                        alignment: center;
+
+                        Glyph {
+                            source: @image-url("../icons/arrow-left.svg");
+                            tint: Theme.mono-tint;
+                            icon-size: 16px;
+                        }
                     }
 
                     back-touch := TouchArea {
@@ -296,118 +377,124 @@ export component SettingsPage inherits Rectangle {
                     color: Theme.text;
                 }
 
-                // Row 1: Follow system, Light, Dark
-                HorizontalLayout {
+                // Presets wrap into as many columns as the window width allows.
+                FlexboxLayout {
                     spacing: 12px;
+                    alignment: start;
+                    cross-axis-line-alignment: start;
 
-                    ThemePresetCard {
-                        label: "Follow system";
-                        checked: Theme.preference == ThemePreference.system;
-                        dot1: #3b9eef;
-                        dot2: #2b2b2b;
-                        dot3: #ffffff;
-                        dot4: #8f8f8f;
-                        clicked => {
-                            Theme.preference = ThemePreference.system;
-                            root.theme-selected(ThemePreference.system);
-                        }
+                    for item in Theme.presets : PresetCard {
+                        preset: item;
+                        chosen(value) => { root.theme-selected(value); }
                     }
-
-                    ThemePresetCard {
-                        label: "Light";
-                        checked: Theme.preference == ThemePreference.light;
-                        dot1: #0078d7;
-                        dot2: #ffffff;
-                        dot3: #f2f2f2;
-                        dot4: #1f1f1f;
-                        clicked => {
-                            Theme.preference = ThemePreference.light;
-                            root.theme-selected(ThemePreference.light);
-                        }
-                    }
-
-                    ThemePresetCard {
-                        label: "Dark";
-                        checked: Theme.preference == ThemePreference.dark;
-                        dot1: #3b9eef;
-                        dot2: #1f1f1f;
-                        dot3: #2b2b2b;
-                        dot4: #e6e6e6;
-                        clicked => {
-                            Theme.preference = ThemePreference.dark;
-                            root.theme-selected(ThemePreference.dark);
-                        }
-                    }
-
-                    Rectangle { }
                 }
 
-                // Row 2: Catppuccin Latte, Frappé, Macchiato
-                HorizontalLayout {
-                    spacing: 12px;
-
-                    ThemePresetCard {
-                        label: "Catppuccin Latte";
-                        checked: Theme.preference == ThemePreference.latte;
-                        dot1: #8839ef;
-                        dot2: #1e66f5;
-                        dot3: #eff1f5;
-                        dot4: #4c4f69;
-                        clicked => {
-                            Theme.preference = ThemePreference.latte;
-                            root.theme-selected(ThemePreference.latte);
-                        }
-                    }
-
-                    ThemePresetCard {
-                        label: "Catppuccin Frappé";
-                        checked: Theme.preference == ThemePreference.frappe;
-                        dot1: #ca9ee6;
-                        dot2: #8caaee;
-                        dot3: #303446;
-                        dot4: #c6d0f5;
-                        clicked => {
-                            Theme.preference = ThemePreference.frappe;
-                            root.theme-selected(ThemePreference.frappe);
-                        }
-                    }
-
-                    ThemePresetCard {
-                        label: "Catppuccin Macchiato";
-                        checked: Theme.preference == ThemePreference.macchiato;
-                        dot1: #c6a0f6;
-                        dot2: #8aadf4;
-                        dot3: #24273a;
-                        dot4: #cad3f5;
-                        clicked => {
-                            Theme.preference = ThemePreference.macchiato;
-                            root.theme-selected(ThemePreference.macchiato);
-                        }
-                    }
-
-                    Rectangle { }
+                Text {
+                    text: "Custom colours";
+                    font-size: 14px;
+                    font-weight: 600;
+                    color: Theme.text;
                 }
 
-                // Row 3: Catppuccin Mocha
-                HorizontalLayout {
-                    spacing: 12px;
-
-                    ThemePresetCard {
-                        label: "Catppuccin Mocha";
-                        checked: Theme.preference == ThemePreference.mocha;
-                        dot1: #cba6f7;
-                        dot2: #89b4fa;
-                        dot3: #1e1e2e;
-                        dot4: #cdd6f4;
-                        clicked => {
-                            Theme.preference = ThemePreference.mocha;
-                            root.theme-selected(ThemePreference.mocha);
-                        }
-                    }
-
-                    Rectangle { }
+                Text {
+                    text: "Write any #RRGGBB colour — it applies as you type.";
+                    font-size: 11px;
+                    color: Theme.text-secondary;
                 }
 
+                VerticalLayout {
+                    spacing: 6px;
+                    CustomColourField {
+                        label: "Background";
+                        hex: Theme.custom-bg-hex;
+                        swatch: Theme.custom-bg;
+                        changed(text) => {
+                            Theme.custom-bg-hex = text;
+                            Theme.preference = ThemePreference.custom;
+                            root.custom-colors-changed();
+                        }
+                    }
+                    CustomColourField {
+                        label: "Sidebar / tabs";
+                        hex: Theme.custom-sidebar-hex;
+                        swatch: Theme.custom-sidebar;
+                        changed(text) => {
+                            Theme.custom-sidebar-hex = text;
+                            Theme.preference = ThemePreference.custom;
+                            root.custom-colors-changed();
+                        }
+                    }
+                    CustomColourField {
+                        label: "Ribbon";
+                        hex: Theme.custom-ribbon-hex;
+                        swatch: Theme.custom-ribbon;
+                        changed(text) => {
+                            Theme.custom-ribbon-hex = text;
+                            Theme.preference = ThemePreference.custom;
+                            root.custom-colors-changed();
+                        }
+                    }
+                    CustomColourField {
+                        label: "Cards and fields";
+                        hex: Theme.custom-field-hex;
+                        swatch: Theme.custom-field;
+                        changed(text) => {
+                            Theme.custom-field-hex = text;
+                            Theme.preference = ThemePreference.custom;
+                            root.custom-colors-changed();
+                        }
+                    }
+                    CustomColourField {
+                        label: "Accent";
+                        hex: Theme.custom-accent-hex;
+                        swatch: Theme.custom-accent;
+                        changed(text) => {
+                            Theme.custom-accent-hex = text;
+                            Theme.preference = ThemePreference.custom;
+                            root.custom-colors-changed();
+                        }
+                    }
+                    CustomColourField {
+                        label: "Text";
+                        hex: Theme.custom-text-hex;
+                        swatch: Theme.custom-text;
+                        changed(text) => {
+                            Theme.custom-text-hex = text;
+                            Theme.preference = ThemePreference.custom;
+                            root.custom-colors-changed();
+                        }
+                    }
+                    CustomColourField {
+                        label: "Secondary text";
+                        hex: Theme.custom-text-secondary-hex;
+                        swatch: Theme.custom-text-secondary;
+                        changed(text) => {
+                            Theme.custom-text-secondary-hex = text;
+                            Theme.preference = ThemePreference.custom;
+                            root.custom-colors-changed();
+                        }
+                    }
+                    CustomColourField {
+                        label: "Borders";
+                        hex: Theme.custom-border-hex;
+                        swatch: Theme.custom-border;
+                        changed(text) => {
+                            Theme.custom-border-hex = text;
+                            Theme.preference = ThemePreference.custom;
+                            root.custom-colors-changed();
+                        }
+                    }
+                    CustomColourField {
+                        label: "Icon tint";
+                        hex: Theme.custom-icon-tint-hex;
+                        swatch: Theme.custom-icon-tint;
+                        changed(text) => {
+                            Theme.custom-icon-tint-hex = text;
+                            Theme.preference = ThemePreference.custom;
+                            root.custom-colors-changed();
+                        }
+                    }
+                }
                 Rectangle { }
             }
         }
