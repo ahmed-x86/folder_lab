@@ -1,15 +1,23 @@
 import { Theme } from "../theme.slint";
 import { Glyph } from "../components/glyph.slint";
 import { DriveCard } from "../components/drive-card.slint";
-import { DiskInfo } from "../types.slint";
+import { FileCard } from "../components/file-card.slint";
+import { DiskInfo, FileEntry, BrowseState } from "../types.slint";
+import { ScrollView } from "std-widgets.slint";
 
 export component ContentPane inherits Rectangle {
     in property <[DiskInfo]> disks;
+    in property <[FileEntry]> files;
+    in property <BrowseState> browse-state: BrowseState.Home;
+    in-out property <int> selected-index: -1;
+
+    callback navigate-to(string);
 
     horizontal-stretch: 1;
     background: Theme.bg;
 
-    VerticalLayout {
+    // ── HOME: show drive cards ───────────────────────────────────────────────
+    if root.browse-state == BrowseState.Home : VerticalLayout {
         padding-left: 14px;
         padding-right: 14px;
         padding-top: 14px;
@@ -40,6 +48,9 @@ export component ContentPane inherits Rectangle {
 
             for disk[i] in root.disks : DriveCard {
                 disk: disk;
+                double-clicked => {
+                    root.navigate-to(disk.mount);
+                }
             }
         }
 
@@ -50,5 +61,70 @@ export component ContentPane inherits Rectangle {
         }
 
         Rectangle { }
+    }
+
+    // ── DIRECTORY: show files and folders ────────────────────────────────────
+    if root.browse-state == BrowseState.Directory : ScrollView {
+        horizontal-stretch: 1;
+        vertical-stretch: 1;
+
+        FlexboxLayout {
+            alignment: LayoutAlignment.start;
+            cross-axis-line-alignment: LayoutAlignment.start;
+            cross-axis-alignment: CrossAxisAlignment.start;
+            spacing: 6px;
+            padding: 14px;
+
+            for entry[i] in root.files : FileCard {
+                entry: entry;
+                selected: root.selected-index == i;
+                clicked => {
+                    root.selected-index = i;
+                }
+                double-clicked => {
+                    if (entry.is-dir) {
+                        root.navigate-to(entry.name);
+                    }
+                }
+            }
+        }
+    }
+
+    // ── NO PERMISSION ────────────────────────────────────────────────────────
+    if root.browse-state == BrowseState.NoPermission : Rectangle {
+        horizontal-stretch: 1;
+        vertical-stretch: 1;
+
+        VerticalLayout {
+            alignment: center;
+            spacing: 10px;
+
+            Text {
+                text: "You do not have permission to view the contents of this folder.";
+                font-size: 13px;
+                color: Theme.text-muted;
+                horizontal-alignment: TextHorizontalAlignment.center;
+                vertical-alignment: TextVerticalAlignment.center;
+            }
+        }
+    }
+
+    // ── EMPTY ────────────────────────────────────────────────────────────────
+    if root.browse-state == BrowseState.Empty : Rectangle {
+        horizontal-stretch: 1;
+        vertical-stretch: 1;
+
+        VerticalLayout {
+            alignment: center;
+            spacing: 10px;
+
+            Text {
+                text: "This folder is empty.";
+                font-size: 13px;
+                color: Theme.text-muted;
+                horizontal-alignment: TextHorizontalAlignment.center;
+                vertical-alignment: TextVerticalAlignment.center;
+            }
+        }
     }
 }
