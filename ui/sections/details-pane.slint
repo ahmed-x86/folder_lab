@@ -1,0 +1,171 @@
+import { Theme } from "../theme.slint";
+import { Glyph } from "../components/glyph.slint";
+import { FileDetails } from "../types.slint";
+
+export component DetailsPane inherits Rectangle {
+    in property <FileDetails> details;
+    in property <string> current-path: "";
+    in property <int> item-count: 0;
+    callback properties-clicked();
+
+    width: 260px;
+    background: Theme.sidebar-bg;
+
+    // Left separator
+    Rectangle {
+        x: 0;
+        y: 0;
+        width: 1px;
+        height: parent.height;
+        background: Theme.separator;
+    }
+
+    VerticalLayout {
+        padding: 16px;
+        spacing: 14px;
+        alignment: start;
+
+        // Header / Large Preview Icon
+        HorizontalLayout {
+            alignment: center;
+            height: 90px;
+
+            if !root.details.has-selection : Glyph {
+                source: @image-url("../icons/pc.svg");
+                icon-size: 64px;
+            }
+
+            if root.details.has-selection : Image {
+                source: root.details.is-dir
+                    ? @image-url("../icons/folder.svg")
+                    : @image-url("../icons/file.svg");
+                width: 64px;
+                height: 64px;
+                image-fit: ImageFit.contain;
+            }
+        }
+
+        // Title
+        Text {
+            text: root.details.has-selection
+                ? root.details.name
+                : (root.current-path == "" ? "This PC (\{root.item-count} items)" : "\{root.current-path}");
+            font-size: 14px;
+            font-weight: 600;
+            color: Theme.text;
+            horizontal-alignment: center;
+            overflow: elide;
+        }
+
+        Rectangle {
+            height: 1px;
+            background: Theme.separator;
+        }
+
+        // If no selection: info placeholder matching Image 1
+        if !root.details.has-selection : Rectangle {
+            border-radius: 6px;
+            background: Theme.field-bg;
+            border-width: 1px;
+            border-color: Theme.field-border;
+
+            HorizontalLayout {
+                padding: 12px;
+                spacing: 10px;
+                alignment: start;
+
+                Glyph {
+                    source: @image-url("../icons/properties.svg");
+                    icon-size: 16px;
+                    tint: Theme.accent;
+                }
+
+                Text {
+                    text: "Select a single file or folder to get more information and details.";
+                    font-size: 11px;
+                    color: Theme.text-secondary;
+                    wrap: word-wrap;
+                    horizontal-stretch: 1;
+                }
+            }
+        }
+
+        // If item selected: full details table matching Image 2
+        if root.details.has-selection : VerticalLayout {
+            spacing: 10px;
+
+            Text {
+                text: "Details";
+                font-size: 12px;
+                font-weight: 600;
+                color: Theme.text;
+            }
+
+            // Type
+            HorizontalLayout {
+                spacing: 8px;
+                Text { text: "Type"; font-size: 11px; color: Theme.text-secondary; width: 80px; }
+                Text { text: root.details.file-type; font-size: 11px; color: Theme.text; overflow: elide; horizontal-stretch: 1; }
+            }
+
+            // Location
+            HorizontalLayout {
+                spacing: 8px;
+                Text { text: "File location"; font-size: 11px; color: Theme.text-secondary; width: 80px; }
+                Text { text: root.details.location; font-size: 11px; color: Theme.text; overflow: elide; horizontal-stretch: 1; }
+            }
+
+            // Date modified
+            HorizontalLayout {
+                spacing: 8px;
+                Text { text: "Date modified"; font-size: 11px; color: Theme.text-secondary; width: 80px; }
+                Text { text: root.details.date-modified; font-size: 11px; color: Theme.text; overflow: elide; horizontal-stretch: 1; }
+            }
+
+            // Size
+            if !root.details.is-dir : HorizontalLayout {
+                spacing: 8px;
+                Text { text: "Size"; font-size: 11px; color: Theme.text-secondary; width: 80px; }
+                Text { text: root.details.size; font-size: 11px; color: Theme.text; overflow: elide; horizontal-stretch: 1; }
+            }
+
+            Rectangle { height: 10px; }
+
+            // Properties Button (like in Image 2)
+            Rectangle {
+                height: 28px;
+                border-radius: 4px;
+                border-width: 1px;
+                border-color: Theme.field-border;
+                background: prop-touch.has-hover ? Theme.hover : Theme.field-bg;
+
+                HorizontalLayout {
+                    padding-left: 10px;
+                    padding-right: 10px;
+                    spacing: 6px;
+                    alignment: center;
+
+                    Glyph {
+                        source: @image-url("../icons/properties.svg");
+                        icon-size: 14px;
+                    }
+
+                    Text {
+                        text: "Properties";
+                        font-size: 11px;
+                        color: Theme.text;
+                        vertical-alignment: center;
+                    }
+                }
+
+                prop-touch := TouchArea {
+                    mouse-cursor: MouseCursor.pointer;
+                    clicked => { root.properties-clicked(); }
+                }
+            }
+        }
+
+        // Push to top
+        Rectangle { vertical-stretch: 1; }
+    }
+}
