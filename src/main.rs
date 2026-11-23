@@ -7,7 +7,7 @@ use std::ffi::CString;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use slint::{Color, ComponentHandle, ModelRc, SharedString, VecModel};
+use slint::{Color, ComponentHandle, Model, ModelRc, SharedString, VecModel};
 
 use crate::config::{Config, CustomColors, ThemeChoice};
 
@@ -505,6 +505,7 @@ fn apply_directory(ui: &AppWindow, path: &Path) {
     let (state, entries) = read_directory(path);
     ui.set_files(ModelRc::new(VecModel::from(entries)));
     ui.set_browse_state(state);
+    ui.set_selected_index(-1);
     ui.set_current_path(path.to_string_lossy().as_ref().into());
     update_nav_buttons(ui);
 }
@@ -512,6 +513,7 @@ fn apply_directory(ui: &AppWindow, path: &Path) {
 fn apply_home(ui: &AppWindow) {
     ui.set_files(ModelRc::new(VecModel::from(vec![])));
     ui.set_browse_state(BrowseState::Home);
+    ui.set_selected_index(-1);
     ui.set_current_path(SharedString::from(""));
     update_nav_buttons(ui);
 }
@@ -674,6 +676,100 @@ fn main() -> Result<(), slint::PlatformError> {
                 apply_home(&ui);
             } else {
                 apply_directory(&ui, &path);
+            }
+        }
+    });
+
+    // ── key-nav (letter navigation) ───────────────────────────────────────────
+    let ui_weak = ui.as_weak();
+    ui.on_key_nav(move |ch| {
+        let Some(ui) = ui_weak.upgrade() else { return };
+        if ui.get_browse_state() != BrowseState::Directory {
+            return;
+        }
+        let ch_str = ch.to_string();
+        if ch_str.is_empty() {
+            return;
+        }
+
+        let current_sel = ui.get_selected_index();
+        let files = ui.get_files();
+        let count = files.row_count();
+        if count == 0 {
+            return;
+        }
+
+        let query = ch_str.to_lowercase();
+        let mut matches = Vec::new();
+        for i in 0..count {
+            if let Some(entry) = files.row_data(i) {
+                let name = entry.name.to_lowercase();
+                if name.starts_with(&query) {
+                    matches.push(i as i32);
+                }
+            }
+        }
+
+        if matches.is_empty() {
+            return;
+        }
+
+        let next_index = if let Some(pos) = matches.iter().position(|&idx| idx == current_sel) {
+            let next_pos = (pos + 1) % matches.len();
+            matches[next_pos]
+        } else {
+            matches[0]
+        };
+
+        ui.set_selected_index(next_index);
+    });
+
+    // ── navigate-arrows ───────────────────────────────────────────────────────
+    let ui_weak = ui.as_weak();
+    ui.on_navigate_arrows(move |delta| {
+        let Some(ui) = ui_weak.upgrade() else { return };
+        if ui.get_browse_state() != BrowseState::Directory {
+            return;
+        }
+        let count = ui.get_files().row_count() as i32;
+        if count == 0 {
+            return;
+        }
+        let current = ui.get_selected_index();
+        let next = if current < 0 {
+            0
+        } else {
+            (current + delta).clamp(0, count - 1)
+        };
+        ui.set_selected_index(next);
+    });
+
+    // ── activate-selected (Enter key) ─────────────────────────────────────────
+    let ui_weak = ui.as_weak();
+    let nav_clone = nav.clone();
+    ui.on_activate_selected(move || {
+        let Some(ui) = ui_weak.upgrade() else { return };
+        if ui.get_browse_state() != BrowseState::Directory {
+            return;
+        }
+        let sel = ui.get_selected_index();
+        if sel < 0 {
+            return;
+        }
+        let files = ui.get_files();
+        if let Some(entry) = files.row_data(sel as usize) {
+            if entry.is_dir {
+                let current_str = ui.get_current_path().to_string();
+                let target = PathBuf::from(&current_str).join(entry.name.to_string());
+                let resolved = target.canonicalize().unwrap_or(target);
+
+                nav_clone.borrow_mut().push(resolved.clone());
+                let nav_ref = nav_clone.borrow();
+                ui.set_can_go_back(nav_ref.can_back());
+                ui.set_can_go_forward(nav_ref.can_forward());
+                drop(nav_ref);
+
+                apply_directory(&ui, &resolved);
             }
         }
     });
