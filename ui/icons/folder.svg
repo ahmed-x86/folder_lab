@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+  <defs>
+    <linearGradient id="folderBack" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#EAA622"/>
+      <stop offset="100%" stop-color="#D49110"/>
+    </linearGradient>
+    <linearGradient id="folderFront" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFE785"/>
+      <stop offset="25%" stop-color="#FFDD65"/>
+      <stop offset="100%" stop-color="#FFCA36"/>
+    </linearGradient>
+    <linearGradient id="folderPaper" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#E8ECEF"/>
+    </linearGradient>
+    <filter id="shadow" x="-5%" y="-5%" width="115%" height="120%">
+      <feDropShadow dx="0" dy="1.5" stdDeviation="1.2" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+
+  <!-- Back folder plate with tab -->
+  <path d="M 5 13 C 5 11.3 6.3 10 8 10 L 19 10 C 20.2 10 21.3 10.7 21.8 11.8 L 23.5 15 L 40 15 C 41.7 15 43 16.3 43 18 L 43 38 C 43 39.7 41.7 41 40 41 L 8 41 C 6.3 41 5 39.7 5 38 Z"
+        fill="url(#folderBack)"/>
+
+  <!-- Paper peeking inside -->
+  <rect x="9" y="14" width="30" height="14" rx="1.5" fill="url(#folderPaper)" opacity="0.9"/>
+
+  <!-- Front folder flap -->
+  <path d="M 5 21 C 5 19.3 6.3 18 8 18 L 40 18 C 41.7 18 43 19.3 43 21 L 43 38 C 43 39.7 41.7 41 40 41 L 8 41 C 6.3 41 5 39.7 5 38 Z"
+        fill="url(#folderFront)"
+        filter="url(#shadow)"
+        stroke="#CA870B"
+        stroke-width="0.75"/>
+</svg>
