@@ -1,0 +1,357 @@
+import { Theme } from "../theme.slint";
+import { Glyph } from "../components/glyph.slint";
+import { ViewMode, SortField, SortOrder } from "../types.slint";
+
+component ToolbarButton inherits Rectangle {
+    in property <image> icon;
+    in property <string> label: "";
+    in property <bool> enabled: true;
+    in property <bool> active: false;
+    in property <bool> has-dropdown: false;
+    callback clicked();
+
+    height: 32px;
+    border-radius: 4px;
+    background: root.active
+        ? Theme.selected
+        : (touch.has-hover && root.enabled ? Theme.hover : transparent);
+    opacity: root.enabled ? 1.0 : 0.4;
+
+    HorizontalLayout {
+        padding-left: root.label != "" ? 8px : 7px;
+        padding-right: root.label != "" ? 8px : 7px;
+        spacing: 6px;
+        alignment: center;
+
+        Glyph {
+            source: root.icon;
+            icon-size: 16px;
+            tint: root.active ? Theme.accent : Theme.mono-tint;
+        }
+
+        if root.label != "" : Text {
+            text: root.label;
+            font-size: 12px;
+            color: root.active ? Theme.accent : Theme.text;
+            vertical-alignment: center;
+        }
+
+        if root.has-dropdown : Glyph {
+            source: @image-url("../icons/chevron-down.svg");
+            icon-size: 8px;
+            tint: Theme.mono-tint;
+            faded: 0.6;
+        }
+    }
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+export component CommandBar inherits Rectangle {
+    height: 44px;
+    background: Theme.ribbon-bg;
+
+    in property <bool> has-selection: false;
+    in property <bool> is-dir-selected: false;
+    in-out property <ViewMode> view-mode: ViewMode.Grid;
+    in-out property <SortField> sort-field: SortField.Name;
+    in-out property <SortOrder> sort-order: SortOrder.Ascending;
+    in-out property <bool> show-details: true;
+
+    callback new-folder();
+    callback cut();
+    callback copy();
+    callback paste();
+    callback rename();
+    callback delete();
+    callback toggle-details();
+    callback sort-changed(SortField, SortOrder);
+    callback view-mode-changed(ViewMode);
+
+    private property <bool> sort-menu-open: false;
+    private property <bool> view-menu-open: false;
+
+    HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 10px;
+        padding-top: 6px;
+        padding-bottom: 6px;
+        spacing: 4px;
+
+        // + New Folder
+        ToolbarButton {
+            icon: @image-url("../icons/new-folder.svg");
+            label: "New";
+            has-dropdown: true;
+            clicked => { root.new-folder(); }
+        }
+
+        Rectangle { width: 1px; height: 20px; background: Theme.separator; }
+
+        // Cut
+        ToolbarButton {
+            icon: @image-url("../icons/cut.svg");
+            enabled: root.has-selection;
+            clicked => { root.cut(); }
+        }
+
+        // Copy
+        ToolbarButton {
+            icon: @image-url("../icons/copy.svg");
+            enabled: root.has-selection;
+            clicked => { root.copy(); }
+        }
+
+        // Paste
+        ToolbarButton {
+            icon: @image-url("../icons/paste.svg");
+            clicked => { root.paste(); }
+        }
+
+        // Rename
+        ToolbarButton {
+            icon: @image-url("../icons/rename.svg");
+            enabled: root.has-selection;
+            clicked => { root.rename(); }
+        }
+
+        // Share
+        ToolbarButton {
+            icon: @image-url("../icons/share.svg");
+            enabled: root.has-selection;
+        }
+
+        // Delete
+        ToolbarButton {
+            icon: @image-url("../icons/delete.svg");
+            enabled: root.has-selection;
+            clicked => { root.delete(); }
+        }
+
+        Rectangle { width: 1px; height: 20px; background: Theme.separator; }
+
+        // Sort menu button
+        sort-btn := ToolbarButton {
+            icon: @image-url("../icons/sort.svg");
+            label: "Sort";
+            has-dropdown: true;
+            active: root.sort-menu-open;
+            clicked => {
+                root.sort-menu-open = !root.sort-menu-open;
+                root.view-menu-open = false;
+            }
+        }
+
+        // View menu button
+        view-btn := ToolbarButton {
+            icon: root.view-mode == ViewMode.Grid ? @image-url("../icons/view-grid.svg") : @image-url("../icons/view-details.svg");
+            label: "View";
+            has-dropdown: true;
+            active: root.view-menu-open;
+            clicked => {
+                root.view-menu-open = !root.view-menu-open;
+                root.sort-menu-open = false;
+            }
+        }
+
+        // Spacer
+        Rectangle { horizontal-stretch: 1; }
+
+        // Details pane toggle on the right (like in Windows Explorer)
+        ToolbarButton {
+            icon: @image-url("../icons/details.svg");
+            label: "Details";
+            active: root.show-details;
+            clicked => {
+                root.show-details = !root.show-details;
+                root.toggle-details();
+            }
+        }
+    }
+
+    // Sort Dropdown Menu
+    if root.sort-menu-open : Rectangle {
+        x: sort-btn.x;
+        y: parent.height + 2px;
+        width: 160px;
+        border-radius: 6px;
+        border-width: 1px;
+        border-color: Theme.field-border;
+        background: Theme.field-bg;
+        z: 100;
+
+        VerticalLayout {
+            padding: 4px;
+            spacing: 2px;
+
+            menu-name := Rectangle {
+                height: 26px;
+                border-radius: 4px;
+                background: touch-name.has-hover ? Theme.hover : (root.sort-field == SortField.Name ? Theme.selected : transparent);
+                HorizontalLayout {
+                    padding-left: 8px;
+                    spacing: 6px;
+                    Text { text: "Name"; font-size: 11px; color: Theme.text; vertical-alignment: center; }
+                }
+                touch-name := TouchArea {
+                    clicked => {
+                        root.sort-field = SortField.Name;
+                        root.sort-changed(root.sort-field, root.sort-order);
+                        root.sort-menu-open = false;
+                    }
+                }
+            }
+
+            menu-date := Rectangle {
+                height: 26px;
+                border-radius: 4px;
+                background: touch-date.has-hover ? Theme.hover : (root.sort-field == SortField.Date ? Theme.selected : transparent);
+                HorizontalLayout {
+                    padding-left: 8px;
+                    spacing: 6px;
+                    Text { text: "Date modified"; font-size: 11px; color: Theme.text; vertical-alignment: center; }
+                }
+                touch-date := TouchArea {
+                    clicked => {
+                        root.sort-field = SortField.Date;
+                        root.sort-changed(root.sort-field, root.sort-order);
+                        root.sort-menu-open = false;
+                    }
+                }
+            }
+
+            menu-type := Rectangle {
+                height: 26px;
+                border-radius: 4px;
+                background: touch-type.has-hover ? Theme.hover : (root.sort-field == SortField.Type ? Theme.selected : transparent);
+                HorizontalLayout {
+                    padding-left: 8px;
+                    spacing: 6px;
+                    Text { text: "Type"; font-size: 11px; color: Theme.text; vertical-alignment: center; }
+                }
+                touch-type := TouchArea {
+                    clicked => {
+                        root.sort-field = SortField.Type;
+                        root.sort-changed(root.sort-field, root.sort-order);
+                        root.sort-menu-open = false;
+                    }
+                }
+            }
+
+            menu-size := Rectangle {
+                height: 26px;
+                border-radius: 4px;
+                background: touch-size.has-hover ? Theme.hover : (root.sort-field == SortField.Size ? Theme.selected : transparent);
+                HorizontalLayout {
+                    padding-left: 8px;
+                    spacing: 6px;
+                    Text { text: "Size"; font-size: 11px; color: Theme.text; vertical-alignment: center; }
+                }
+                touch-size := TouchArea {
+                    clicked => {
+                        root.sort-field = SortField.Size;
+                        root.sort-changed(root.sort-field, root.sort-order);
+                        root.sort-menu-open = false;
+                    }
+                }
+            }
+
+            Rectangle { height: 1px; background: Theme.separator; }
+
+            menu-asc := Rectangle {
+                height: 26px;
+                border-radius: 4px;
+                background: touch-asc.has-hover ? Theme.hover : (root.sort-order == SortOrder.Ascending ? Theme.selected : transparent);
+                HorizontalLayout {
+                    padding-left: 8px;
+                    spacing: 6px;
+                    Text { text: "Ascending"; font-size: 11px; color: Theme.text; vertical-alignment: center; }
+                }
+                touch-asc := TouchArea {
+                    clicked => {
+                        root.sort-order = SortOrder.Ascending;
+                        root.sort-changed(root.sort-field, root.sort-order);
+                        root.sort-menu-open = false;
+                    }
+                }
+            }
+
+            menu-desc := Rectangle {
+                height: 26px;
+                border-radius: 4px;
+                background: touch-desc.has-hover ? Theme.hover : (root.sort-order == SortOrder.Descending ? Theme.selected : transparent);
+                HorizontalLayout {
+                    padding-left: 8px;
+                    spacing: 6px;
+                    Text { text: "Descending"; font-size: 11px; color: Theme.text; vertical-alignment: center; }
+                }
+                touch-desc := TouchArea {
+                    clicked => {
+                        root.sort-order = SortOrder.Descending;
+                        root.sort-changed(root.sort-field, root.sort-order);
+                        root.sort-menu-open = false;
+                    }
+                }
+            }
+        }
+    }
+
+    // View Dropdown Menu
+    if root.view-menu-open : Rectangle {
+        x: view-btn.x;
+        y: parent.height + 2px;
+        width: 140px;
+        border-radius: 6px;
+        border-width: 1px;
+        border-color: Theme.field-border;
+        background: Theme.field-bg;
+        z: 100;
+
+        VerticalLayout {
+            padding: 4px;
+            spacing: 2px;
+
+            menu-grid := Rectangle {
+                height: 26px;
+                border-radius: 4px;
+                background: touch-grid.has-hover ? Theme.hover : (root.view-mode == ViewMode.Grid ? Theme.selected : transparent);
+                HorizontalLayout {
+                    padding-left: 8px;
+                    spacing: 6px;
+                    Glyph { source: @image-url("../icons/view-grid.svg"); icon-size: 12px; }
+                    Text { text: "Large icons"; font-size: 11px; color: Theme.text; vertical-alignment: center; }
+                }
+                touch-grid := TouchArea {
+                    clicked => {
+                        root.view-mode = ViewMode.Grid;
+                        root.view-mode-changed(ViewMode.Grid);
+                        root.view-menu-open = false;
+                    }
+                }
+            }
+
+            menu-details := Rectangle {
+                height: 26px;
+                border-radius: 4px;
+                background: touch-details.has-hover ? Theme.hover : (root.view-mode == ViewMode.Details ? Theme.selected : transparent);
+                HorizontalLayout {
+                    padding-left: 8px;
+                    spacing: 6px;
+                    Glyph { source: @image-url("../icons/view-details.svg"); icon-size: 12px; }
+                    Text { text: "Details"; font-size: 11px; color: Theme.text; vertical-alignment: center; }
+                }
+                touch-details := TouchArea {
+                    clicked => {
+                        root.view-mode = ViewMode.Details;
+                        root.view-mode-changed(ViewMode.Details);
+                        root.view-menu-open = false;
+                    }
+                }
+            }
+        }
+    }
+}
