@@ -5,6 +5,9 @@ export component NavPane inherits Rectangle {
     width: 200px;
     background: Theme.sidebar-bg;
 
+    callback navigate-to(string);
+    callback navigate-home();
+
     VerticalLayout {
         padding-top: 6px;
         padding-bottom: 6px;
@@ -13,6 +16,7 @@ export component NavPane inherits Rectangle {
         SidebarItem {
             icon: @image-url("../icons/home.svg");
             label: "Home";
+            clicked => { root.navigate-home(); }
         }
 
         SidebarItem {
@@ -81,6 +85,7 @@ export component NavPane inherits Rectangle {
             icon: @image-url("../icons/pc.svg");
             label: "Folder Lab";
             selected: true;
+            clicked => { root.navigate-home(); }
         }
 
         SidebarItem {
