@@ -1,22 +1,23 @@
 import { Theme, ThemePreference } from "theme.slint";
-import { DiskInfo, FileEntry, BrowseState } from "types.slint";
+import { DiskInfo, FileDetails, FileEntry, BrowseState, ViewMode, SortField, SortOrder } from "types.slint";
 import { TabsBar } from "sections/tabs-bar.slint";
-import { Ribbon } from "sections/ribbon.slint";
+import { CommandBar } from "sections/command-bar.slint";
 import { AddressBar } from "sections/address-bar.slint";
 import { NavPane } from "sections/nav-pane.slint";
 import { ContentPane } from "sections/content-pane.slint";
+import { DetailsPane } from "sections/details-pane.slint";
 import { StatusBar } from "sections/status-bar.slint";
 import { ThinSeparator } from "components/thin-separator.slint";
 import { SettingsPage } from "sections/settings-page.slint";
 
-export { DiskInfo, FileEntry, BrowseState, Theme, ThemePreference }
+export { DiskInfo, FileDetails, FileEntry, BrowseState, ViewMode, SortField, SortOrder, Theme, ThemePreference }
 
 export component AppWindow inherits Window {
-    title: "Folder Lab";
+    title: root.current-path == "" ? "This PC - Folder Lab" : "\{root.current-path} - Folder Lab";
     icon: @image-url("icons/explorer.svg");
-    preferred-width: 1000px;
-    preferred-height: 640px;
-    min-width: 360px;
+    preferred-width: 1040px;
+    preferred-height: 660px;
+    min-width: 480px;
     min-height: 420px;
     background: Theme.bg;
     default-font-family: "Noto Sans";
@@ -33,8 +34,21 @@ export component AppWindow inherits Window {
     // What the content pane should show
     in property <BrowseState> browse-state: BrowseState.Home;
 
+    // View mode: Grid or Details
+    in-out property <ViewMode> view-mode: ViewMode.Grid;
+
+    // Sorting
+    in-out property <SortField> sort-field: SortField.Name;
+    in-out property <SortOrder> sort-order: SortOrder.Ascending;
+
     // Currently selected file/folder index (-1 for none)
     in-out property <int> selected-index: -1;
+
+    // Selected file details for the right Details pane
+    in property <FileDetails> selected-details;
+
+    // Toggle for right Details pane
+    in-out property <bool> show-details: true;
 
     // Navigation history
     in-out property <[string]> history: [];
@@ -46,15 +60,30 @@ export component AppWindow inherits Window {
     callback theme-selected(ThemePreference);
     callback custom-colors-changed();
 
-    // Rust side handles these
+    // Navigation callbacks
     callback navigate-to(string);
+    callback navigate-special(string);
     callback navigate-up();
     callback navigate-back();
     callback navigate-forward();
     callback navigate-home();
+    callback refresh();
+
+    // Selection & keyboard navigation
     callback key-nav(string);
     callback navigate-arrows(int);
     callback activate-selected();
+    callback sort-changed(SortField, SortOrder);
+    callback view-mode-changed(ViewMode);
+
+    // Actions from CommandBar / Shortcuts
+    callback new-folder();
+    callback cut();
+    callback copy();
+    callback paste();
+    callback rename();
+    callback delete();
+    callback toggle-hidden();
 
     // Can we go back/forward?
     in property <bool> can-go-back: false;
@@ -65,8 +94,26 @@ export component AppWindow inherits Window {
         TabsBar {
             settings-requested => { root.show-settings = true; }
         }
-        Ribbon { }
+
+        CommandBar {
+            has-selection: root.selected-index >= 0;
+            view-mode <=> root.view-mode;
+            sort-field <=> root.sort-field;
+            sort-order <=> root.sort-order;
+            show-details <=> root.show-details;
+
+            new-folder => { root.new-folder(); }
+            cut => { root.cut(); }
+            copy => { root.copy(); }
+            paste => { root.paste(); }
+            rename => { root.rename(); }
+            delete => { root.delete(); }
+            sort-changed(f, o) => { root.sort-changed(f, o); }
+            view-mode-changed(m) => { root.view-mode-changed(m); }
+        }
+
         ThinSeparator { }
+
         AddressBar {
             current-path: root.current-path;
             can-go-back: root.can-go-back;
@@ -78,13 +125,16 @@ export component AppWindow inherits Window {
             navigate-forward => { root.navigate-forward(); }
             navigate-home => { root.navigate-home(); }
         }
+
         ThinSeparator { }
 
         HorizontalLayout {
             vertical-stretch: 1;
 
             NavPane {
+                current-path: root.current-path;
                 navigate-to(path) => { root.navigate-to(path); }
+                navigate-special(kind) => { root.navigate-special(kind); }
                 navigate-home => { root.navigate-home(); }
             }
 
@@ -93,23 +143,56 @@ export component AppWindow inherits Window {
                 background: Theme.separator;
             }
 
-            content-pane := ContentPane {
+            ContentPane {
                 disks: root.disks;
                 files: root.files;
                 browse-state: root.browse-state;
+                view-mode <=> root.view-mode;
+                sort-field <=> root.sort-field;
+                sort-order <=> root.sort-order;
                 selected-index <=> root.selected-index;
                 navigate-to(path) => { root.navigate-to(path); }
                 key-nav(ch) => { root.key-nav(ch); }
                 navigate-arrows(delta) => { root.navigate-arrows(delta); }
                 activate-selected => { root.activate-selected(); }
+                go-back => { root.navigate-back(); }
+                go-forward => { root.navigate-forward(); }
+                go-up => { root.navigate-up(); }
+                refresh => { root.refresh(); }
+                toggle-hidden => { root.toggle-hidden(); }
+                new-folder => { root.new-folder(); }
+                delete => { root.delete(); }
+                copy => { root.copy(); }
+                cut => { root.cut(); }
+                paste => { root.paste(); }
+                toggle-details => { root.show-details = !root.show-details; }
+                sort-requested(f) => {
+                    if (root.sort-field == f) {
+                        root.sort-order = (root.sort-order == SortOrder.Ascending) ? SortOrder.Descending : SortOrder.Ascending;
+                    } else {
+                        root.sort-field = f;
+                        root.sort-order = SortOrder.Ascending;
+                    }
+                    root.sort-changed(root.sort-field, root.sort-order);
+                }
+            }
+
+            if root.show-details : DetailsPane {
+                details: root.selected-details;
+                current-path: root.current-path;
+                item-count: root.files.length;
             }
         }
 
         ThinSeparator { }
+
         StatusBar {
             item-count: root.browse-state == BrowseState.Home
                 ? root.disks.length
                 : (root.browse-state == BrowseState.Directory ? root.files.length : 0);
+            selected-count: root.selected-index >= 0 ? 1 : 0;
+            view-mode <=> root.view-mode;
+            view-mode-changed(m) => { root.view-mode-changed(m); }
         }
     }
 
