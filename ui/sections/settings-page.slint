@@ -9,14 +9,19 @@ component ThemePresetCard inherits Rectangle {
     in property <color> dot2;
     in property <color> dot3;
     in property <color> dot4;
+    in property <color> card-bg: Theme.field-bg;
+    in property <color> card-text: Theme.text;
+    in property <color> card-border: Theme.field-border;
+    in property <color> card-accent: Theme.accent;
+    in property <color> card-hover: Theme.hover;
     callback clicked();
 
     width: 200px;
     height: 72px;
     border-radius: 10px;
-    background: touch.has-hover ? Theme.hover : Theme.field-bg;
+    background: touch.has-hover ? root.card-hover : root.card-bg;
     border-width: root.checked ? 2px : 1px;
-    border-color: root.checked ? Theme.accent : Theme.field-border;
+    border-color: root.checked ? root.card-accent : root.card-border;
     clip: true;
 
     VerticalLayout {
@@ -34,7 +39,7 @@ component ThemePresetCard inherits Rectangle {
                 text: root.label;
                 font-size: 12px;
                 font-weight: 600;
-                color: Theme.text;
+                color: root.card-text;
                 horizontal-alignment: left;
                 vertical-alignment: center;
                 horizontal-stretch: 1;
@@ -49,7 +54,7 @@ component ThemePresetCard inherits Rectangle {
                     width: 14px;
                     height: 14px;
                     border-radius: 7px;
-                    background: Theme.accent;
+                    background: root.card-accent;
 
                     Rectangle {
                         width: 6px;
@@ -120,6 +125,11 @@ component PresetCard inherits ThemePresetCard {
     dot2: Theme.dot2(root.preset);
     dot3: Theme.dot3(root.preset);
     dot4: Theme.dot4(root.preset);
+    card-bg: Theme.preset-bg(root.preset);
+    card-text: Theme.preset-text(root.preset);
+    card-border: Theme.preset-border(root.preset);
+    card-accent: Theme.preset-accent(root.preset);
+    card-hover: Theme.preset-field(root.preset);
 
     clicked => {
         Theme.preference = root.preset;
@@ -377,10 +387,11 @@ export component SettingsPage inherits Rectangle {
                     color: Theme.text;
                 }
 
-                // Presets wrap into as many columns as the window width allows.
+                // Presets wrap into as many columns as fit; centering each line
+                // splits the free width into two equal left/right margins.
                 FlexboxLayout {
                     spacing: 12px;
-                    alignment: start;
+                    alignment: center;
                     cross-axis-line-alignment: start;
 
                     for item in Theme.presets : PresetCard {
