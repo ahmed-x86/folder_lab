@@ -16,7 +16,7 @@ export component AppWindow inherits Window {
     icon: @image-url("icons/explorer.svg");
     preferred-width: 1000px;
     preferred-height: 640px;
-    min-width: 700px;
+    min-width: 360px;
     min-height: 420px;
     background: Theme.bg;
     default-font-family: "Noto Sans";
@@ -28,6 +28,7 @@ export component AppWindow inherits Window {
     in-out property <bool> show-settings: false;
 
     callback theme-selected(ThemePreference);
+    callback custom-colors-changed();
 
     if !root.show-settings : VerticalLayout {
         TabsBar {
@@ -62,5 +63,6 @@ export component AppWindow inherits Window {
     if root.show-settings : SettingsPage {
         go-back => { root.show-settings = false; }
         theme-selected(pref) => { root.theme-selected(pref); }
+        custom-colors-changed => { root.custom-colors-changed(); }
     }
 }
