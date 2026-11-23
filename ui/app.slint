@@ -1,5 +1,5 @@
 import { Theme, ThemePreference } from "theme.slint";
-import { DiskInfo } from "types.slint";
+import { DiskInfo, FileEntry, BrowseState } from "types.slint";
 import { TabsBar } from "sections/tabs-bar.slint";
 import { Ribbon } from "sections/ribbon.slint";
 import { AddressBar } from "sections/address-bar.slint";
@@ -9,7 +9,7 @@ import { StatusBar } from "sections/status-bar.slint";
 import { ThinSeparator } from "components/thin-separator.slint";
 import { SettingsPage } from "sections/settings-page.slint";
 
-export { DiskInfo, Theme, ThemePreference }
+export { DiskInfo, FileEntry, BrowseState, Theme, ThemePreference }
 
 export component AppWindow inherits Window {
     title: "Folder Lab";
@@ -24,11 +24,36 @@ export component AppWindow inherits Window {
 
     in property <[DiskInfo]> disks;
 
+    // Current path shown in the address bar; empty string = home (disks page)
+    in-out property <string> current-path: "";
+
+    // Files/folders for the current directory
+    in property <[FileEntry]> files;
+
+    // What the content pane should show
+    in property <BrowseState> browse-state: BrowseState.Home;
+
+    // Navigation history
+    in-out property <[string]> history: [];
+    in-out property <int> history-index: -1;
+
     // "main" or "settings"
     in-out property <bool> show-settings: false;
 
     callback theme-selected(ThemePreference);
     callback custom-colors-changed();
+
+    // Rust side handles these
+    callback navigate-to(string);
+    callback navigate-up();
+    callback navigate-back();
+    callback navigate-forward();
+    callback navigate-home();
+
+    // Can we go back/forward?
+    in property <bool> can-go-back: false;
+    in property <bool> can-go-forward: false;
+    in property <bool> can-go-up: false;
 
     if !root.show-settings : VerticalLayout {
         TabsBar {
@@ -36,13 +61,26 @@ export component AppWindow inherits Window {
         }
         Ribbon { }
         ThinSeparator { }
-        AddressBar { }
+        AddressBar {
+            current-path: root.current-path;
+            can-go-back: root.can-go-back;
+            can-go-forward: root.can-go-forward;
+            can-go-up: root.can-go-up;
+            navigate-to(path) => { root.navigate-to(path); }
+            navigate-up => { root.navigate-up(); }
+            navigate-back => { root.navigate-back(); }
+            navigate-forward => { root.navigate-forward(); }
+            navigate-home => { root.navigate-home(); }
+        }
         ThinSeparator { }
 
         HorizontalLayout {
             vertical-stretch: 1;
 
-            NavPane { }
+            NavPane {
+                navigate-to(path) => { root.navigate-to(path); }
+                navigate-home => { root.navigate-home(); }
+            }
 
             Rectangle {
                 width: 1px;
@@ -51,12 +89,17 @@ export component AppWindow inherits Window {
 
             ContentPane {
                 disks: root.disks;
+                files: root.files;
+                browse-state: root.browse-state;
+                navigate-to(path) => { root.navigate-to(path); }
             }
         }
 
         ThinSeparator { }
         StatusBar {
-            item-count: root.disks.length;
+            item-count: root.browse-state == BrowseState.Home
+                ? root.disks.length
+                : (root.browse-state == BrowseState.Directory ? root.files.length : 0);
         }
     }
 
