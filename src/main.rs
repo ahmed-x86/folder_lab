@@ -2,6 +2,7 @@ slint::include_modules!();
 
 mod config;
 mod fs_ops;
+mod icon_theme;
 mod nav;
 
 use std::cell::RefCell;
@@ -19,6 +20,7 @@ use crate::fs_ops::{
     collect_disks, compute_dir_stats, disk_space, format_count, format_size, get_file_details,
     read_directory, sort_entries,
 };
+use crate::icon_theme::IconTheme;
 use crate::nav::{NavState, NavTarget};
 
 impl From<ThemeChoice> for ThemePreference {
@@ -212,6 +214,7 @@ fn empty_file_details() -> FileDetails {
         device: "".into(),
         disk_used_percent: 0.0,
         has_selection: false,
+        icon: slint::Image::default(),
     }
 }
 
@@ -253,27 +256,34 @@ fn get_disk_details(disk: &DiskInfo) -> FileDetails {
         device: disk.device.clone(),
         disk_used_percent: used_pct,
         has_selection: true,
+        icon: disk.icon.clone(),
     }
 }
 
-fn apply_directory(ui: &AppWindow, path: &Path, show_hidden: bool, folder_calc_gen: &Arc<AtomicU64>) {
+fn apply_directory(
+    ui: &AppWindow,
+    path: &Path,
+    show_hidden: bool,
+    folder_calc_gen: &Arc<AtomicU64>,
+    icon_theme: &IconTheme,
+) {
     let sort_field = ui.get_sort_field();
     let sort_order = ui.get_sort_order();
-    let (state, entries) = read_directory(path, show_hidden, sort_field, sort_order);
+    let (state, entries) = read_directory(path, show_hidden, sort_field, sort_order, icon_theme);
     ui.set_files(ModelRc::new(VecModel::from(entries)));
     ui.set_browse_state(state);
     ui.set_selected_index(-1);
     ui.set_current_path(path.to_string_lossy().as_ref().into());
-    update_details_for_selection(ui, folder_calc_gen);
+    update_details_for_selection(ui, folder_calc_gen, icon_theme);
     update_nav_buttons(ui);
 }
 
-fn apply_home(ui: &AppWindow, folder_calc_gen: &Arc<AtomicU64>) {
+fn apply_home(ui: &AppWindow, folder_calc_gen: &Arc<AtomicU64>, icon_theme: &IconTheme) {
     ui.set_files(ModelRc::new(VecModel::from(vec![])));
     ui.set_browse_state(BrowseState::Home);
     ui.set_selected_index(-1);
     ui.set_current_path(SharedString::from(""));
-    update_details_for_selection(ui, folder_calc_gen);
+    update_details_for_selection(ui, folder_calc_gen, icon_theme);
     update_nav_buttons(ui);
 }
 
@@ -286,7 +296,11 @@ fn update_nav_buttons(ui: &AppWindow) {
     ui.set_can_go_up(can_up);
 }
 
-fn update_details_for_selection(ui: &AppWindow, folder_calc_gen: &Arc<AtomicU64>) {
+fn update_details_for_selection(
+    ui: &AppWindow,
+    folder_calc_gen: &Arc<AtomicU64>,
+    icon_theme: &IconTheme,
+) {
     folder_calc_gen.fetch_add(1, Ordering::SeqCst);
 
     let sel = ui.get_selected_index();
@@ -314,7 +328,7 @@ fn update_details_for_selection(ui: &AppWindow, folder_calc_gen: &Arc<AtomicU64>
                 } else {
                     PathBuf::from(&current_str).join(entry.name.to_string())
                 };
-                let details = get_file_details(&item_path);
+                let details = get_file_details(&item_path, icon_theme);
                 let is_dir = details.is_dir;
                 ui.set_selected_details(details);
 
@@ -394,7 +408,9 @@ fn resolve_special_path(kind: &str) -> PathBuf {
 
 fn main() -> Result<(), slint::PlatformError> {
     let ui = AppWindow::new()?;
-    ui.set_disks(ModelRc::new(VecModel::from(collect_disks())));
+    let icon_theme = Rc::new(IconTheme::new());
+
+    ui.set_disks(ModelRc::new(VecModel::from(collect_disks(&icon_theme))));
     ui.set_files(ModelRc::new(VecModel::from(vec![])));
     ui.set_browse_state(BrowseState::Home);
     ui.set_view_mode(ViewMode::Grid);
@@ -438,8 +454,8 @@ fn main() -> Result<(), slint::PlatformError> {
 
     // Apply the initial target to the UI
     match &initial_target {
-        NavTarget::Home => apply_home(&ui, &folder_calc_gen),
-        NavTarget::Directory(p) => apply_directory(&ui, p, *show_hidden.borrow(), &folder_calc_gen),
+        NavTarget::Home => apply_home(&ui, &folder_calc_gen, &icon_theme),
+        NavTarget::Directory(p) => apply_directory(&ui, p, *show_hidden.borrow(), &folder_calc_gen, &icon_theme),
     }
     ui.set_can_go_back(false);
     ui.set_can_go_forward(false);
@@ -447,9 +463,10 @@ fn main() -> Result<(), slint::PlatformError> {
     // ── selection-changed ────────────────────────────────────────────────────
     let ui_weak = ui.as_weak();
     let folder_calc_gen_clone = folder_calc_gen.clone();
+    let icon_theme_clone = icon_theme.clone();
     ui.on_selection_changed(move |_sel| {
         let Some(ui) = ui_weak.upgrade() else { return };
-        update_details_for_selection(&ui, &folder_calc_gen_clone);
+        update_details_for_selection(&ui, &folder_calc_gen_clone, &icon_theme_clone);
     });
 
     // ── navigate-to ──────────────────────────────────────────────────────────
@@ -457,6 +474,7 @@ fn main() -> Result<(), slint::PlatformError> {
     let nav_clone = nav.clone();
     let show_hidden_clone = show_hidden.clone();
     let folder_calc_gen_clone = folder_calc_gen.clone();
+    let icon_theme_clone = icon_theme.clone();
     ui.on_navigate_to(move |raw_path| {
         let Some(ui) = ui_weak.upgrade() else { return };
         let raw = raw_path.to_string();
@@ -479,7 +497,7 @@ fn main() -> Result<(), slint::PlatformError> {
         ui.set_can_go_forward(nav_ref.can_forward());
         drop(nav_ref);
 
-        apply_directory(&ui, &resolved, *show_hidden_clone.borrow(), &folder_calc_gen_clone);
+        apply_directory(&ui, &resolved, *show_hidden_clone.borrow(), &folder_calc_gen_clone, &icon_theme_clone);
     });
 
     // ── navigate-special (Desktop, Downloads, etc.) ──────────────────────────
@@ -487,6 +505,7 @@ fn main() -> Result<(), slint::PlatformError> {
     let nav_clone = nav.clone();
     let show_hidden_clone = show_hidden.clone();
     let folder_calc_gen_clone = folder_calc_gen.clone();
+    let icon_theme_clone = icon_theme.clone();
     ui.on_navigate_special(move |kind| {
         let Some(ui) = ui_weak.upgrade() else { return };
         let target = resolve_special_path(&kind);
@@ -498,13 +517,14 @@ fn main() -> Result<(), slint::PlatformError> {
         ui.set_can_go_forward(nav_ref.can_forward());
         drop(nav_ref);
 
-        apply_directory(&ui, &resolved, *show_hidden_clone.borrow(), &folder_calc_gen_clone);
+        apply_directory(&ui, &resolved, *show_hidden_clone.borrow(), &folder_calc_gen_clone, &icon_theme_clone);
     });
 
     // ── navigate-home (This PC) ──────────────────────────────────────────────
     let ui_weak = ui.as_weak();
     let nav_clone = nav.clone();
     let folder_calc_gen_clone = folder_calc_gen.clone();
+    let icon_theme_clone = icon_theme.clone();
     ui.on_navigate_home(move || {
         let Some(ui) = ui_weak.upgrade() else { return };
         nav_clone.borrow_mut().push(NavTarget::Home);
@@ -512,7 +532,7 @@ fn main() -> Result<(), slint::PlatformError> {
         ui.set_can_go_back(nav_ref.can_back());
         ui.set_can_go_forward(nav_ref.can_forward());
         drop(nav_ref);
-        apply_home(&ui, &folder_calc_gen_clone);
+        apply_home(&ui, &folder_calc_gen_clone, &icon_theme_clone);
     });
 
     // ── navigate-up ───────────────────────────────────────────────────────────
@@ -520,6 +540,7 @@ fn main() -> Result<(), slint::PlatformError> {
     let nav_clone = nav.clone();
     let show_hidden_clone = show_hidden.clone();
     let folder_calc_gen_clone = folder_calc_gen.clone();
+    let icon_theme_clone = icon_theme.clone();
     ui.on_navigate_up(move || {
         let Some(ui) = ui_weak.upgrade() else { return };
         let current_str = ui.get_current_path().to_string();
@@ -535,14 +556,14 @@ fn main() -> Result<(), slint::PlatformError> {
                 ui.set_can_go_back(nav_ref.can_back());
                 ui.set_can_go_forward(nav_ref.can_forward());
                 drop(nav_ref);
-                apply_home(&ui, &folder_calc_gen_clone);
+                apply_home(&ui, &folder_calc_gen_clone, &icon_theme_clone);
             } else {
                 nav_clone.borrow_mut().push(NavTarget::Directory(parent.clone()));
                 let nav_ref = nav_clone.borrow();
                 ui.set_can_go_back(nav_ref.can_back());
                 ui.set_can_go_forward(nav_ref.can_forward());
                 drop(nav_ref);
-                apply_directory(&ui, &parent, *show_hidden_clone.borrow(), &folder_calc_gen_clone);
+                apply_directory(&ui, &parent, *show_hidden_clone.borrow(), &folder_calc_gen_clone, &icon_theme_clone);
             }
         } else {
             nav_clone.borrow_mut().push(NavTarget::Home);
@@ -550,7 +571,7 @@ fn main() -> Result<(), slint::PlatformError> {
             ui.set_can_go_back(nav_ref.can_back());
             ui.set_can_go_forward(nav_ref.can_forward());
             drop(nav_ref);
-            apply_home(&ui, &folder_calc_gen_clone);
+            apply_home(&ui, &folder_calc_gen_clone, &icon_theme_clone);
         }
     });
 
@@ -559,6 +580,7 @@ fn main() -> Result<(), slint::PlatformError> {
     let nav_clone = nav.clone();
     let show_hidden_clone = show_hidden.clone();
     let folder_calc_gen_clone = folder_calc_gen.clone();
+    let icon_theme_clone = icon_theme.clone();
     ui.on_navigate_back(move || {
         let Some(ui) = ui_weak.upgrade() else { return };
         let mut nav_ref = nav_clone.borrow_mut();
@@ -569,8 +591,8 @@ fn main() -> Result<(), slint::PlatformError> {
             ui.set_can_go_back(can_back);
             ui.set_can_go_forward(can_forward);
             match target {
-                NavTarget::Home => apply_home(&ui, &folder_calc_gen_clone),
-                NavTarget::Directory(path) => apply_directory(&ui, &path, *show_hidden_clone.borrow(), &folder_calc_gen_clone),
+                NavTarget::Home => apply_home(&ui, &folder_calc_gen_clone, &icon_theme_clone),
+                NavTarget::Directory(path) => apply_directory(&ui, &path, *show_hidden_clone.borrow(), &folder_calc_gen_clone, &icon_theme_clone),
             }
         }
     });
@@ -580,6 +602,7 @@ fn main() -> Result<(), slint::PlatformError> {
     let nav_clone = nav.clone();
     let show_hidden_clone = show_hidden.clone();
     let folder_calc_gen_clone = folder_calc_gen.clone();
+    let icon_theme_clone = icon_theme.clone();
     ui.on_navigate_forward(move || {
         let Some(ui) = ui_weak.upgrade() else { return };
         let mut nav_ref = nav_clone.borrow_mut();
@@ -590,8 +613,8 @@ fn main() -> Result<(), slint::PlatformError> {
             ui.set_can_go_back(can_back);
             ui.set_can_go_forward(can_forward);
             match target {
-                NavTarget::Home => apply_home(&ui, &folder_calc_gen_clone),
-                NavTarget::Directory(path) => apply_directory(&ui, &path, *show_hidden_clone.borrow(), &folder_calc_gen_clone),
+                NavTarget::Home => apply_home(&ui, &folder_calc_gen_clone, &icon_theme_clone),
+                NavTarget::Directory(path) => apply_directory(&ui, &path, *show_hidden_clone.borrow(), &folder_calc_gen_clone, &icon_theme_clone),
             }
         }
     });
@@ -600,21 +623,23 @@ fn main() -> Result<(), slint::PlatformError> {
     let ui_weak = ui.as_weak();
     let show_hidden_clone = show_hidden.clone();
     let folder_calc_gen_clone = folder_calc_gen.clone();
+    let icon_theme_clone = icon_theme.clone();
     ui.on_refresh(move || {
         let Some(ui) = ui_weak.upgrade() else { return };
         let current_str = ui.get_current_path().to_string();
         if current_str.is_empty() {
-            ui.set_disks(ModelRc::new(VecModel::from(collect_disks())));
-            apply_home(&ui, &folder_calc_gen_clone);
+            ui.set_disks(ModelRc::new(VecModel::from(collect_disks(&icon_theme_clone))));
+            apply_home(&ui, &folder_calc_gen_clone, &icon_theme_clone);
         } else {
             let path = PathBuf::from(&current_str);
-            apply_directory(&ui, &path, *show_hidden_clone.borrow(), &folder_calc_gen_clone);
+            apply_directory(&ui, &path, *show_hidden_clone.borrow(), &folder_calc_gen_clone, &icon_theme_clone);
         }
     });
 
     // ── key-nav (letter navigation in directory and home) ─────────────────────
     let ui_weak = ui.as_weak();
     let folder_calc_gen_clone = folder_calc_gen.clone();
+    let icon_theme_clone = icon_theme.clone();
     ui.on_key_nav(move |ch| {
         let Some(ui) = ui_weak.upgrade() else { return };
         let ch_str = ch.to_string();
@@ -651,7 +676,7 @@ fn main() -> Result<(), slint::PlatformError> {
                     matches[0]
                 };
                 ui.set_selected_index(next_index);
-                update_details_for_selection(&ui, &folder_calc_gen_clone);
+                update_details_for_selection(&ui, &folder_calc_gen_clone, &icon_theme_clone);
             }
             BrowseState::Directory => {
                 let files = ui.get_files();
@@ -678,7 +703,7 @@ fn main() -> Result<(), slint::PlatformError> {
                     matches[0]
                 };
                 ui.set_selected_index(next_index);
-                update_details_for_selection(&ui, &folder_calc_gen_clone);
+                update_details_for_selection(&ui, &folder_calc_gen_clone, &icon_theme_clone);
             }
             _ => {}
         }
@@ -687,6 +712,7 @@ fn main() -> Result<(), slint::PlatformError> {
     // ── navigate-arrows ───────────────────────────────────────────────────────
     let ui_weak = ui.as_weak();
     let folder_calc_gen_clone = folder_calc_gen.clone();
+    let icon_theme_clone = icon_theme.clone();
     ui.on_navigate_arrows(move |delta| {
         let Some(ui) = ui_weak.upgrade() else { return };
         let count = match ui.get_browse_state() {
@@ -704,7 +730,7 @@ fn main() -> Result<(), slint::PlatformError> {
             (current + delta).clamp(0, count - 1)
         };
         ui.set_selected_index(next);
-        update_details_for_selection(&ui, &folder_calc_gen_clone);
+        update_details_for_selection(&ui, &folder_calc_gen_clone, &icon_theme_clone);
     });
 
     // ── activate-selected (Enter key) ─────────────────────────────────────────
@@ -712,6 +738,7 @@ fn main() -> Result<(), slint::PlatformError> {
     let nav_clone = nav.clone();
     let show_hidden_clone = show_hidden.clone();
     let folder_calc_gen_clone = folder_calc_gen.clone();
+    let icon_theme_clone = icon_theme.clone();
     ui.on_activate_selected(move || {
         let Some(ui) = ui_weak.upgrade() else { return };
         let sel = ui.get_selected_index();
@@ -731,7 +758,7 @@ fn main() -> Result<(), slint::PlatformError> {
                 ui.set_can_go_forward(nav_ref.can_forward());
                 drop(nav_ref);
 
-                apply_directory(&ui, &resolved, *show_hidden_clone.borrow(), &folder_calc_gen_clone);
+                apply_directory(&ui, &resolved, *show_hidden_clone.borrow(), &folder_calc_gen_clone, &icon_theme_clone);
             }
             return;
         }
@@ -750,7 +777,7 @@ fn main() -> Result<(), slint::PlatformError> {
                     ui.set_can_go_forward(nav_ref.can_forward());
                     drop(nav_ref);
 
-                    apply_directory(&ui, &resolved, *show_hidden_clone.borrow(), &folder_calc_gen_clone);
+                    apply_directory(&ui, &resolved, *show_hidden_clone.borrow(), &folder_calc_gen_clone, &icon_theme_clone);
                 }
             }
         }
@@ -759,6 +786,7 @@ fn main() -> Result<(), slint::PlatformError> {
     // ── Sorting ───────────────────────────────────────────────────────────────
     let ui_weak = ui.as_weak();
     let folder_calc_gen_clone = folder_calc_gen.clone();
+    let icon_theme_clone = icon_theme.clone();
     ui.on_sort_changed(move |field, order| {
         let Some(ui) = ui_weak.upgrade() else { return };
         if ui.get_browse_state() != BrowseState::Directory {
@@ -771,7 +799,7 @@ fn main() -> Result<(), slint::PlatformError> {
         sort_entries(&mut entries, field, order);
         ui.set_files(ModelRc::new(VecModel::from(entries)));
         ui.set_selected_index(-1);
-        update_details_for_selection(&ui, &folder_calc_gen_clone);
+        update_details_for_selection(&ui, &folder_calc_gen_clone, &icon_theme_clone);
     });
 
     // ── View Mode changed ─────────────────────────────────────────────────────
@@ -785,6 +813,7 @@ fn main() -> Result<(), slint::PlatformError> {
     let ui_weak = ui.as_weak();
     let show_hidden_clone = show_hidden.clone();
     let folder_calc_gen_clone = folder_calc_gen.clone();
+    let icon_theme_clone = icon_theme.clone();
     ui.on_new_folder(move || {
         let Some(ui) = ui_weak.upgrade() else { return };
         let current_str = ui.get_current_path().to_string();
@@ -799,13 +828,14 @@ fn main() -> Result<(), slint::PlatformError> {
             counter += 1;
         }
         let _ = fs::create_dir(base_dir.join(&folder_name));
-        apply_directory(&ui, &base_dir, *show_hidden_clone.borrow(), &folder_calc_gen_clone);
+        apply_directory(&ui, &base_dir, *show_hidden_clone.borrow(), &folder_calc_gen_clone, &icon_theme_clone);
     });
 
     // ── Delete action ─────────────────────────────────────────────────────────
     let ui_weak = ui.as_weak();
     let show_hidden_clone = show_hidden.clone();
     let folder_calc_gen_clone = folder_calc_gen.clone();
+    let icon_theme_clone = icon_theme.clone();
     ui.on_delete(move || {
         let Some(ui) = ui_weak.upgrade() else { return };
         let sel = ui.get_selected_index();
@@ -821,7 +851,7 @@ fn main() -> Result<(), slint::PlatformError> {
             } else {
                 let _ = fs::remove_file(&path);
             }
-            apply_directory(&ui, &PathBuf::from(&current_str), *show_hidden_clone.borrow(), &folder_calc_gen_clone);
+            apply_directory(&ui, &PathBuf::from(&current_str), *show_hidden_clone.borrow(), &folder_calc_gen_clone, &icon_theme_clone);
         }
     });
 
@@ -858,6 +888,7 @@ fn main() -> Result<(), slint::PlatformError> {
     let clip_clone = clipboard.clone();
     let show_hidden_clone = show_hidden.clone();
     let folder_calc_gen_clone = folder_calc_gen.clone();
+    let icon_theme_clone = icon_theme.clone();
     ui.on_paste(move || {
         let Some(ui) = ui_weak.upgrade() else { return };
         let current_str = ui.get_current_path().to_string();
@@ -880,13 +911,14 @@ fn main() -> Result<(), slint::PlatformError> {
         }
         drop(clip);
 
-        apply_directory(&ui, &dest_dir, *show_hidden_clone.borrow(), &folder_calc_gen_clone);
+        apply_directory(&ui, &dest_dir, *show_hidden_clone.borrow(), &folder_calc_gen_clone, &icon_theme_clone);
     });
 
     // ── Toggle Hidden files ───────────────────────────────────────────────────
     let ui_weak = ui.as_weak();
     let show_hidden_clone = show_hidden.clone();
     let folder_calc_gen_clone = folder_calc_gen.clone();
+    let icon_theme_clone = icon_theme.clone();
     ui.on_toggle_hidden(move || {
         let Some(ui) = ui_weak.upgrade() else { return };
         let mut val = show_hidden_clone.borrow_mut();
@@ -896,7 +928,7 @@ fn main() -> Result<(), slint::PlatformError> {
 
         let current_str = ui.get_current_path().to_string();
         if !current_str.is_empty() {
-            apply_directory(&ui, &PathBuf::from(&current_str), is_hidden, &folder_calc_gen_clone);
+            apply_directory(&ui, &PathBuf::from(&current_str), is_hidden, &folder_calc_gen_clone, &icon_theme_clone);
         }
     });
 
