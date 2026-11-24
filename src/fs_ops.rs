@@ -168,24 +168,109 @@ pub fn format_size(bytes: u64) -> String {
     const KIB: f64 = 1024.0;
     const MIB: f64 = 1024.0 * 1024.0;
     const GIB: f64 = 1024.0 * 1024.0 * 1024.0;
+    const TIB: f64 = 1024.0 * 1024.0 * 1024.0 * 1024.0;
 
-    let gib = bytes as f64 / GIB;
-    if gib >= 1.0 {
-        let value = format!("{gib:.1}");
-        format!("{} GB", value.trim_end_matches(".0"))
+    let tib = bytes as f64 / TIB;
+    if tib >= 1.0 {
+        let value = format!("{tib:.1}");
+        format!("{} TB", value.trim_end_matches(".0"))
     } else {
-        let mib = bytes as f64 / MIB;
-        if mib >= 1.0 {
-            format!("{:.1} MB", mib)
+        let gib = bytes as f64 / GIB;
+        if gib >= 1.0 {
+            let value = format!("{gib:.1}");
+            format!("{} GB", value.trim_end_matches(".0"))
         } else {
-            let kib = bytes as f64 / KIB;
-            if kib >= 1.0 {
-                format!("{:.0} KB", kib)
+            let mib = bytes as f64 / MIB;
+            if mib >= 1.0 {
+                format!("{:.1} MB", mib)
             } else {
-                format!("{} B", bytes)
+                let kib = bytes as f64 / KIB;
+                if kib >= 1.0 {
+                    format!("{:.0} KB", kib)
+                } else {
+                    format!("{} B", bytes)
+                }
             }
         }
     }
+}
+
+pub fn format_count(count: u64) -> String {
+    let s = count.to_string();
+    let bytes = s.as_bytes();
+    let len = bytes.len();
+    let mut out = String::with_capacity(len + len / 3);
+    for (i, &b) in bytes.iter().enumerate() {
+        if i > 0 && (len - i) % 3 == 0 {
+            out.push(',');
+        }
+        out.push(b as char);
+    }
+    out
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct DirStats {
+    pub total_bytes: u64,
+    pub dir_count: u64,
+    pub file_count: u64,
+}
+
+pub fn compute_dir_stats(path: &Path, should_stop: impl Fn() -> bool) -> Option<DirStats> {
+    if fs::read_dir(path).is_err() {
+        return None;
+    }
+
+    let mut total_bytes = 0u64;
+    let mut dir_count = 0u64;
+    let mut file_count = 0u64;
+
+    let mut stack = vec![path.to_path_buf()];
+
+    while let Some(current_dir) = stack.pop() {
+        if should_stop() {
+            return None;
+        }
+
+        let Ok(entries) = fs::read_dir(&current_dir) else {
+            continue;
+        };
+
+        for entry in entries.flatten() {
+            if should_stop() {
+                return None;
+            }
+
+            let Ok(file_type) = entry.file_type() else {
+                continue;
+            };
+
+            // Avoid following directory symlinks to prevent infinite loops
+            if file_type.is_symlink() {
+                file_count += 1;
+                if let Ok(meta) = entry.metadata() {
+                    total_bytes += meta.len();
+                }
+                continue;
+            }
+
+            if file_type.is_dir() {
+                dir_count += 1;
+                stack.push(entry.path());
+            } else {
+                file_count += 1;
+                if let Ok(meta) = entry.metadata() {
+                    total_bytes += meta.len();
+                }
+            }
+        }
+    }
+
+    Some(DirStats {
+        total_bytes,
+        dir_count,
+        file_count,
+    })
 }
 
 pub fn short_device(device: &str) -> &str {
@@ -379,10 +464,19 @@ pub fn get_file_details(item_path: &Path) -> FileDetails {
         return FileDetails {
             name: item_path.file_name().unwrap_or_default().to_string_lossy().as_ref().into(),
             is_dir: false,
+            is_disk: false,
             file_type: "Unknown".into(),
             location: item_path.parent().unwrap_or(item_path).to_string_lossy().as_ref().into(),
             date_modified: "-".into(),
             size: "-".into(),
+            folders_count: "".into(),
+            files_count: "".into(),
+            free_space: "".into(),
+            total_space: "".into(),
+            used_space: "".into(),
+            fs_type: "".into(),
+            device: "".into(),
+            disk_used_percent: 0.0,
             has_selection: true,
         };
     };
@@ -397,19 +491,109 @@ pub fn get_file_details(item_path: &Path) -> FileDetails {
         .unwrap_or_else(|| ("-".to_string(), 0));
 
     let file_type = detect_file_type(item_path, is_dir);
-    let size_str = if is_dir {
-        "File folder".to_string()
+    let (size_str, folders_count, files_count) = if is_dir {
+        ("Calculating...".to_string(), "Calculating...".to_string(), "Calculating...".to_string())
     } else {
-        format_size(meta.len())
+        (format_size(meta.len()), String::new(), String::new())
     };
 
     FileDetails {
         name: name.into(),
         is_dir,
+        is_disk: false,
         file_type: file_type.into(),
         location: location.into(),
         date_modified: date_str.into(),
         size: size_str.into(),
+        folders_count: folders_count.into(),
+        files_count: files_count.into(),
+        free_space: "".into(),
+        total_space: "".into(),
+        used_space: "".into(),
+        fs_type: "".into(),
+        device: "".into(),
+        disk_used_percent: 0.0,
         has_selection: true,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs::File;
+    use std::io::Write;
+
+    #[test]
+    fn test_format_size() {
+        assert_eq!(format_size(0), "0 B");
+        assert_eq!(format_size(512), "512 B");
+        assert_eq!(format_size(1024), "1 KB");
+        assert_eq!(format_size(1536), "2 KB");
+        assert_eq!(format_size(1024 * 1024), "1.0 MB");
+        assert_eq!(format_size(1024 * 1024 * 1024), "1 GB");
+        assert_eq!(format_size(1024 * 1024 * 1024 * 1024), "1 TB");
+    }
+
+    #[test]
+    fn test_format_count() {
+        assert_eq!(format_count(0), "0");
+        assert_eq!(format_count(9), "9");
+        assert_eq!(format_count(999), "999");
+        assert_eq!(format_count(1000), "1,000");
+        assert_eq!(format_count(12345), "12,345");
+        assert_eq!(format_count(1000000), "1,000,000");
+    }
+
+    #[test]
+    fn test_compute_dir_stats() {
+        let temp_dir = std::env::temp_dir().join("folder_lab_test_dir_stats");
+        let _ = fs::remove_dir_all(&temp_dir);
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        // Initially empty
+        let stats = compute_dir_stats(&temp_dir, || false).unwrap();
+        assert_eq!(stats.dir_count, 0);
+        assert_eq!(stats.file_count, 0);
+        assert_eq!(stats.total_bytes, 0);
+
+        // Add 2 files in root
+        let mut f1 = File::create(temp_dir.join("f1.txt")).unwrap();
+        f1.write_all(b"hello").unwrap();
+        let mut f2 = File::create(temp_dir.join("f2.txt")).unwrap();
+        f2.write_all(b"world!").unwrap();
+
+        // Add 1 subdirectory with 1 file inside
+        let sub = temp_dir.join("subdir");
+        fs::create_dir(&sub).unwrap();
+        let mut f3 = File::create(sub.join("f3.txt")).unwrap();
+        f3.write_all(b"1234").unwrap();
+
+        let stats = compute_dir_stats(&temp_dir, || false).unwrap();
+        assert_eq!(stats.dir_count, 1);
+        assert_eq!(stats.file_count, 3);
+        assert_eq!(stats.total_bytes, 5 + 6 + 4);
+
+        // Test cancellation
+        let cancelled = compute_dir_stats(&temp_dir, || true);
+        assert!(cancelled.is_none());
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_get_file_details_folder() {
+        let temp_dir = std::env::temp_dir().join("folder_lab_test_details");
+        let _ = fs::remove_dir_all(&temp_dir);
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        let details = get_file_details(&temp_dir);
+        assert!(details.has_selection);
+        assert!(details.is_dir);
+        assert_eq!(details.file_type.as_str(), "File folder");
+        assert_eq!(details.size.as_str(), "Calculating...");
+        assert_eq!(details.folders_count.as_str(), "Calculating...");
+        assert_eq!(details.files_count.as_str(), "Calculating...");
+
+        let _ = fs::remove_dir_all(&temp_dir);
     }
 }
