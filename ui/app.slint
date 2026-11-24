@@ -70,11 +70,16 @@ export component AppWindow inherits Window {
     callback refresh();
 
     // Selection & keyboard navigation
+    callback selection-changed(int);
     callback key-nav(string);
     callback navigate-arrows(int);
     callback activate-selected();
     callback sort-changed(SortField, SortOrder);
     callback view-mode-changed(ViewMode);
+
+    changed selected-index => {
+        root.selection-changed(root.selected-index);
+    }
 
     // Actions from CommandBar / Shortcuts
     callback new-folder();
@@ -96,7 +101,7 @@ export component AppWindow inherits Window {
         }
 
         CommandBar {
-            has-selection: root.selected-index >= 0;
+            has-selection: root.browse-state == BrowseState.Directory && root.selected-index >= 0;
             view-mode <=> root.view-mode;
             sort-field <=> root.sort-field;
             sort-order <=> root.sort-order;
@@ -180,7 +185,7 @@ export component AppWindow inherits Window {
             if root.show-details : DetailsPane {
                 details: root.selected-details;
                 current-path: root.current-path;
-                item-count: root.files.length;
+                item-count: root.browse-state == BrowseState.Home ? root.disks.length : root.files.length;
             }
         }
 
