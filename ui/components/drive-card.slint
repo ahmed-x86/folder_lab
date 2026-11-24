@@ -20,9 +20,13 @@ export component DriveCard inherits Rectangle {
         padding: 8px;
         spacing: 10px;
 
-        Glyph {
-            source: @image-url("../icons/drive.svg");
-            icon-size: 48px;
+        Image {
+            source: root.disk.icon.width > 0
+                ? root.disk.icon
+                : @image-url("../icons/drive.svg");
+            width: 48px;
+            height: 48px;
+            image-fit: ImageFit.contain;
         }
 
         VerticalLayout {
