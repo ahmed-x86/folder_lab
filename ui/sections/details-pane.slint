@@ -36,15 +36,21 @@ export component DetailsPane inherits Rectangle {
                 icon-size: 64px;
             }
 
-            if root.details.has-selection && root.details.is-disk : Glyph {
-                source: @image-url("../icons/drive.svg");
-                icon-size: 64px;
+            if root.details.has-selection && root.details.is-disk : Image {
+                source: root.details.icon.width > 0
+                    ? root.details.icon
+                    : @image-url("../icons/drive.svg");
+                width: 64px;
+                height: 64px;
+                image-fit: ImageFit.contain;
             }
 
             if root.details.has-selection && !root.details.is-disk : Image {
-                source: root.details.is-dir
-                    ? @image-url("../icons/folder.svg")
-                    : @image-url("../icons/file.svg");
+                source: root.details.icon.width > 0
+                    ? root.details.icon
+                    : (root.details.is-dir
+                        ? @image-url("../icons/folder.svg")
+                        : @image-url("../icons/file.svg"));
                 width: 64px;
                 height: 64px;
                 image-fit: ImageFit.contain;
