@@ -4,7 +4,8 @@ use std::fs;
 use std::path::Path;
 use std::time::UNIX_EPOCH;
 
-use crate::{DiskInfo, FileDetails, FileEntry, BrowseState, SortField, SortOrder};
+use crate::icon_theme::IconTheme;
+use crate::{BrowseState, DiskInfo, FileDetails, FileEntry, SortField, SortOrder};
 
 /// Filesystems that represent a real, user-visible partition.
 const REAL_FILESYSTEMS: &[&str] = &[
@@ -277,8 +278,9 @@ pub fn short_device(device: &str) -> &str {
     device.rsplit('/').next().unwrap_or(device)
 }
 
-pub fn collect_disks() -> Vec<DiskInfo> {
+pub fn collect_disks(icon_theme: &IconTheme) -> Vec<DiskInfo> {
     let labels = filesystem_labels();
+    let disk_icon = icon_theme.icon_for_disk();
 
     one_per_device(read_mounts())
         .into_iter()
@@ -308,6 +310,7 @@ pub fn collect_disks() -> Vec<DiskInfo> {
                 total: format_size(total).into(),
                 free: format!("{} free of {}", format_size(free), format_size(total)).into(),
                 used,
+                icon: disk_icon.clone(),
             })
         })
         .collect()
@@ -382,6 +385,7 @@ pub fn read_directory(
     show_hidden: bool,
     sort_field: SortField,
     sort_order: SortOrder,
+    icon_theme: &IconTheme,
 ) -> (BrowseState, Vec<FileEntry>) {
     let read_result = fs::read_dir(path);
 
@@ -411,6 +415,7 @@ pub fn read_directory(
                         .unwrap_or_else(|| ("-".to_string(), 0));
 
                     let file_type = detect_file_type(&e.path(), is_dir);
+                    let icon = icon_theme.icon_for_file(&e.path(), is_dir);
 
                     Some(FileEntry {
                         name: name.into(),
@@ -421,6 +426,7 @@ pub fn read_directory(
                         date_timestamp: date_secs as i32,
                         file_type: file_type.into(),
                         is_hidden,
+                        icon,
                     })
                 })
                 .collect();
@@ -459,7 +465,7 @@ pub fn sort_entries(entries: &mut [FileEntry], field: SortField, order: SortOrde
     });
 }
 
-pub fn get_file_details(item_path: &Path) -> FileDetails {
+pub fn get_file_details(item_path: &Path, icon_theme: &IconTheme) -> FileDetails {
     let Ok(meta) = fs::metadata(item_path) else {
         return FileDetails {
             name: item_path.file_name().unwrap_or_default().to_string_lossy().as_ref().into(),
@@ -478,6 +484,7 @@ pub fn get_file_details(item_path: &Path) -> FileDetails {
             device: "".into(),
             disk_used_percent: 0.0,
             has_selection: true,
+            icon: icon_theme.icon_for_file(item_path, false),
         };
     };
 
@@ -496,6 +503,7 @@ pub fn get_file_details(item_path: &Path) -> FileDetails {
     } else {
         (format_size(meta.len()), String::new(), String::new())
     };
+    let icon = icon_theme.icon_for_file(item_path, is_dir);
 
     FileDetails {
         name: name.into(),
@@ -514,6 +522,7 @@ pub fn get_file_details(item_path: &Path) -> FileDetails {
         device: "".into(),
         disk_used_percent: 0.0,
         has_selection: true,
+        icon,
     }
 }
 
@@ -586,7 +595,8 @@ mod tests {
         let _ = fs::remove_dir_all(&temp_dir);
         fs::create_dir_all(&temp_dir).unwrap();
 
-        let details = get_file_details(&temp_dir);
+        let icon_theme = IconTheme::new();
+        let details = get_file_details(&temp_dir, &icon_theme);
         assert!(details.has_selection);
         assert!(details.is_dir);
         assert_eq!(details.file_type.as_str(), "File folder");
