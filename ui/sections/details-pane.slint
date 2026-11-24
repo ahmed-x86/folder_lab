@@ -1,5 +1,6 @@
 import { Theme } from "../theme.slint";
 import { Glyph } from "../components/glyph.slint";
+import { UsageBar } from "../components/usage-bar.slint";
 import { FileDetails } from "../types.slint";
 
 export component DetailsPane inherits Rectangle {
@@ -35,7 +36,12 @@ export component DetailsPane inherits Rectangle {
                 icon-size: 64px;
             }
 
-            if root.details.has-selection : Image {
+            if root.details.has-selection && root.details.is-disk : Glyph {
+                source: @image-url("../icons/drive.svg");
+                icon-size: 64px;
+            }
+
+            if root.details.has-selection && !root.details.is-disk : Image {
                 source: root.details.is-dir
                     ? @image-url("../icons/folder.svg")
                     : @image-url("../icons/file.svg");
@@ -90,8 +96,109 @@ export component DetailsPane inherits Rectangle {
             }
         }
 
-        // If item selected: full details table matching Image 2
-        if root.details.has-selection : VerticalLayout {
+        // If partition / drive is selected
+        if root.details.has-selection && root.details.is-disk : VerticalLayout {
+            spacing: 10px;
+
+            Text {
+                text: "Details";
+                font-size: 12px;
+                font-weight: 600;
+                color: Theme.text;
+            }
+
+            // Type
+            HorizontalLayout {
+                spacing: 8px;
+                Text { text: "Type"; font-size: 11px; color: Theme.text-secondary; width: 80px; }
+                Text { text: root.details.file-type; font-size: 11px; color: Theme.text; overflow: elide; horizontal-stretch: 1; }
+            }
+
+            // File system
+            if root.details.fs-type != "" : HorizontalLayout {
+                spacing: 8px;
+                Text { text: "File system"; font-size: 11px; color: Theme.text-secondary; width: 80px; }
+                Text { text: root.details.fs-type; font-size: 11px; color: Theme.text; overflow: elide; horizontal-stretch: 1; }
+            }
+
+            // Mount point / Location
+            HorizontalLayout {
+                spacing: 8px;
+                Text { text: "Mount point"; font-size: 11px; color: Theme.text-secondary; width: 80px; }
+                Text { text: root.details.location; font-size: 11px; color: Theme.text; overflow: elide; horizontal-stretch: 1; }
+            }
+
+            // Device
+            if root.details.device != "" : HorizontalLayout {
+                spacing: 8px;
+                Text { text: "Device"; font-size: 11px; color: Theme.text-secondary; width: 80px; }
+                Text { text: root.details.device; font-size: 11px; color: Theme.text; overflow: elide; horizontal-stretch: 1; }
+            }
+
+            // Free space
+            HorizontalLayout {
+                spacing: 8px;
+                Text { text: "Free space"; font-size: 11px; color: Theme.text-secondary; width: 80px; }
+                Text { text: root.details.free-space; font-size: 11px; color: Theme.text; overflow: elide; horizontal-stretch: 1; }
+            }
+
+            // Used space
+            HorizontalLayout {
+                spacing: 8px;
+                Text { text: "Used space"; font-size: 11px; color: Theme.text-secondary; width: 80px; }
+                Text { text: root.details.used-space; font-size: 11px; color: Theme.text; overflow: elide; horizontal-stretch: 1; }
+            }
+
+            // Total size
+            HorizontalLayout {
+                spacing: 8px;
+                Text { text: "Total size"; font-size: 11px; color: Theme.text-secondary; width: 80px; }
+                Text { text: root.details.total-space; font-size: 11px; color: Theme.text; overflow: elide; horizontal-stretch: 1; }
+            }
+
+            // Space usage bar
+            UsageBar {
+                used: root.details.disk-used-percent;
+            }
+
+            Rectangle { height: 10px; }
+
+            // Properties Button
+            Rectangle {
+                height: 28px;
+                border-radius: 4px;
+                border-width: 1px;
+                border-color: Theme.field-border;
+                background: disk-prop-touch.has-hover ? Theme.hover : Theme.field-bg;
+
+                HorizontalLayout {
+                    padding-left: 10px;
+                    padding-right: 10px;
+                    spacing: 6px;
+                    alignment: center;
+
+                    Glyph {
+                        source: @image-url("../icons/properties.svg");
+                        icon-size: 14px;
+                    }
+
+                    Text {
+                        text: "Properties";
+                        font-size: 11px;
+                        color: Theme.text;
+                        vertical-alignment: center;
+                    }
+                }
+
+                disk-prop-touch := TouchArea {
+                    mouse-cursor: MouseCursor.pointer;
+                    clicked => { root.properties-clicked(); }
+                }
+            }
+        }
+
+        // If file or folder is selected: full details table matching Image 2
+        if root.details.has-selection && !root.details.is-disk : VerticalLayout {
             spacing: 10px;
 
             Text {
@@ -122,11 +229,25 @@ export component DetailsPane inherits Rectangle {
                 Text { text: root.details.date-modified; font-size: 11px; color: Theme.text; overflow: elide; horizontal-stretch: 1; }
             }
 
-            // Size
-            if !root.details.is-dir : HorizontalLayout {
+            // Size (shown for both files and folders)
+            HorizontalLayout {
                 spacing: 8px;
                 Text { text: "Size"; font-size: 11px; color: Theme.text-secondary; width: 80px; }
                 Text { text: root.details.size; font-size: 11px; color: Theme.text; overflow: elide; horizontal-stretch: 1; }
+            }
+
+            // If folder: Folders count
+            if root.details.is-dir : HorizontalLayout {
+                spacing: 8px;
+                Text { text: "Folders"; font-size: 11px; color: Theme.text-secondary; width: 80px; }
+                Text { text: root.details.folders-count; font-size: 11px; color: Theme.text; overflow: elide; horizontal-stretch: 1; }
+            }
+
+            // If folder: Files count
+            if root.details.is-dir : HorizontalLayout {
+                spacing: 8px;
+                Text { text: "Files"; font-size: 11px; color: Theme.text-secondary; width: 80px; }
+                Text { text: root.details.files-count; font-size: 11px; color: Theme.text; overflow: elide; horizontal-stretch: 1; }
             }
 
             Rectangle { height: 10px; }
