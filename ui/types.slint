@@ -22,10 +22,19 @@ export struct FileEntry {
 export struct FileDetails {
     name: string,
     is-dir: bool,
+    is-disk: bool,
     file-type: string,
     location: string,
     date-modified: string,
     size: string,
+    folders-count: string,
+    files-count: string,
+    free-space: string,
+    total-space: string,
+    used-space: string,
+    fs-type: string,
+    device: string,
+    disk-used-percent: float,
     has-selection: bool,
 }
 
