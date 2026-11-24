@@ -9,11 +9,16 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
 use slint::{Color, ComponentHandle, Model, ModelRc, SharedString, VecModel};
 
 use crate::config::{Config, CustomColors, ThemeChoice};
-use crate::fs_ops::{collect_disks, get_file_details, read_directory, sort_entries};
+use crate::fs_ops::{
+    collect_disks, compute_dir_stats, disk_space, format_count, format_size, get_file_details,
+    read_directory, sort_entries,
+};
 use crate::nav::{NavState, NavTarget};
 
 impl From<ThemeChoice> for ThemePreference {
@@ -189,7 +194,69 @@ struct ClipboardState {
 
 // ─── Apply a directory (or home) to the UI ──────────────────────────────────
 
-fn apply_directory(ui: &AppWindow, path: &Path, show_hidden: bool) {
+fn empty_file_details() -> FileDetails {
+    FileDetails {
+        name: "".into(),
+        is_dir: false,
+        is_disk: false,
+        file_type: "".into(),
+        location: "".into(),
+        date_modified: "".into(),
+        size: "".into(),
+        folders_count: "".into(),
+        files_count: "".into(),
+        free_space: "".into(),
+        total_space: "".into(),
+        used_space: "".into(),
+        fs_type: "".into(),
+        device: "".into(),
+        disk_used_percent: 0.0,
+        has_selection: false,
+    }
+}
+
+fn get_disk_details(disk: &DiskInfo) -> FileDetails {
+    let mount = disk.mount.to_string();
+    let (total_str, free_str, used_str, used_pct) = if let Some((total, free)) = disk_space(&mount) {
+        let used = total.saturating_sub(free);
+        let pct = if total > 0 {
+            ((used as f64 / total as f64) * 100.0).clamp(0.0, 100.0) as f32
+        } else {
+            disk.used
+        };
+        (format_size(total), format_size(free), format_size(used), pct)
+    } else {
+        (disk.total.to_string(), "-".to_string(), "-".to_string(), disk.used)
+    };
+
+    let fs_display = disk.fs.to_string();
+    let file_type = if fs_display.is_empty() {
+        "Local Disk".to_string()
+    } else {
+        format!("Local Disk ({})", fs_display)
+    };
+
+    FileDetails {
+        name: disk.title.clone(),
+        is_dir: false,
+        is_disk: true,
+        file_type: file_type.into(),
+        location: disk.mount.clone(),
+        date_modified: "-".into(),
+        size: total_str.clone().into(),
+        folders_count: "".into(),
+        files_count: "".into(),
+        free_space: free_str.into(),
+        total_space: total_str.into(),
+        used_space: used_str.into(),
+        fs_type: fs_display.into(),
+        device: disk.device.clone(),
+        disk_used_percent: used_pct,
+        has_selection: true,
+    }
+}
+
+fn apply_directory(ui: &AppWindow, path: &Path, show_hidden: bool, folder_calc_gen: &Arc<AtomicU64>) {
     let sort_field = ui.get_sort_field();
     let sort_order = ui.get_sort_order();
     let (state, entries) = read_directory(path, show_hidden, sort_field, sort_order);
@@ -197,16 +264,16 @@ fn apply_directory(ui: &AppWindow, path: &Path, show_hidden: bool) {
     ui.set_browse_state(state);
     ui.set_selected_index(-1);
     ui.set_current_path(path.to_string_lossy().as_ref().into());
-    update_details_for_selection(ui);
+    update_details_for_selection(ui, folder_calc_gen);
     update_nav_buttons(ui);
 }
 
-fn apply_home(ui: &AppWindow) {
+fn apply_home(ui: &AppWindow, folder_calc_gen: &Arc<AtomicU64>) {
     ui.set_files(ModelRc::new(VecModel::from(vec![])));
     ui.set_browse_state(BrowseState::Home);
     ui.set_selected_index(-1);
     ui.set_current_path(SharedString::from(""));
-    update_details_for_selection(ui);
+    update_details_for_selection(ui, folder_calc_gen);
     update_nav_buttons(ui);
 }
 
@@ -219,31 +286,77 @@ fn update_nav_buttons(ui: &AppWindow) {
     ui.set_can_go_up(can_up);
 }
 
-fn update_details_for_selection(ui: &AppWindow) {
+fn update_details_for_selection(ui: &AppWindow, folder_calc_gen: &Arc<AtomicU64>) {
+    folder_calc_gen.fetch_add(1, Ordering::SeqCst);
+
     let sel = ui.get_selected_index();
     if sel < 0 {
-        ui.set_selected_details(FileDetails {
-            name: "".into(),
-            is_dir: false,
-            file_type: "".into(),
-            location: "".into(),
-            date_modified: "".into(),
-            size: "".into(),
-            has_selection: false,
-        });
+        ui.set_selected_details(empty_file_details());
         return;
     }
 
-    let files = ui.get_files();
-    if let Some(entry) = files.row_data(sel as usize) {
-        let current_str = ui.get_current_path().to_string();
-        let item_path = if current_str.is_empty() {
-            PathBuf::from(entry.name.to_string())
-        } else {
-            PathBuf::from(&current_str).join(entry.name.to_string())
-        };
-        let details = get_file_details(&item_path);
-        ui.set_selected_details(details);
+    match ui.get_browse_state() {
+        BrowseState::Home => {
+            let disks = ui.get_disks();
+            if let Some(disk) = disks.row_data(sel as usize) {
+                let details = get_disk_details(&disk);
+                ui.set_selected_details(details);
+            } else {
+                ui.set_selected_details(empty_file_details());
+            }
+        }
+        BrowseState::Directory => {
+            let files = ui.get_files();
+            if let Some(entry) = files.row_data(sel as usize) {
+                let current_str = ui.get_current_path().to_string();
+                let item_path = if current_str.is_empty() {
+                    PathBuf::from(entry.name.to_string())
+                } else {
+                    PathBuf::from(&current_str).join(entry.name.to_string())
+                };
+                let details = get_file_details(&item_path);
+                let is_dir = details.is_dir;
+                ui.set_selected_details(details);
+
+                if is_dir {
+                    let gen = folder_calc_gen.load(Ordering::SeqCst);
+                    let gen_clone = folder_calc_gen.clone();
+                    let ui_weak = ui.as_weak();
+                    let path_clone = item_path.clone();
+
+                    std::thread::spawn(move || {
+                        let stats = compute_dir_stats(&path_clone, || {
+                            gen_clone.load(Ordering::SeqCst) != gen
+                        });
+
+                        if gen_clone.load(Ordering::SeqCst) == gen {
+                            let _ = ui_weak.upgrade_in_event_loop(move |ui| {
+                                if ui.get_selected_index() == sel {
+                                    let mut cur_details = ui.get_selected_details();
+                                    if cur_details.has_selection && cur_details.is_dir {
+                                        if let Some(stats) = stats {
+                                            cur_details.size = format_size(stats.total_bytes).into();
+                                            cur_details.folders_count = format_count(stats.dir_count).into();
+                                            cur_details.files_count = format_count(stats.file_count).into();
+                                        } else {
+                                            cur_details.size = "-".into();
+                                            cur_details.folders_count = "-".into();
+                                            cur_details.files_count = "-".into();
+                                        }
+                                        ui.set_selected_details(cur_details);
+                                    }
+                                }
+                            });
+                        }
+                    });
+                }
+            } else {
+                ui.set_selected_details(empty_file_details());
+            }
+        }
+        _ => {
+            ui.set_selected_details(empty_file_details());
+        }
     }
 }
 
@@ -321,19 +434,29 @@ fn main() -> Result<(), slint::PlatformError> {
     let show_hidden = Rc::new(RefCell::new(false));
     let clipboard = Rc::new(RefCell::new(ClipboardState::default()));
     let nav = Rc::new(RefCell::new(NavState::new(initial_target.clone())));
+    let folder_calc_gen = Arc::new(AtomicU64::new(0));
 
     // Apply the initial target to the UI
     match &initial_target {
-        NavTarget::Home => apply_home(&ui),
-        NavTarget::Directory(p) => apply_directory(&ui, p, *show_hidden.borrow()),
+        NavTarget::Home => apply_home(&ui, &folder_calc_gen),
+        NavTarget::Directory(p) => apply_directory(&ui, p, *show_hidden.borrow(), &folder_calc_gen),
     }
     ui.set_can_go_back(false);
     ui.set_can_go_forward(false);
+
+    // ── selection-changed ────────────────────────────────────────────────────
+    let ui_weak = ui.as_weak();
+    let folder_calc_gen_clone = folder_calc_gen.clone();
+    ui.on_selection_changed(move |_sel| {
+        let Some(ui) = ui_weak.upgrade() else { return };
+        update_details_for_selection(&ui, &folder_calc_gen_clone);
+    });
 
     // ── navigate-to ──────────────────────────────────────────────────────────
     let ui_weak = ui.as_weak();
     let nav_clone = nav.clone();
     let show_hidden_clone = show_hidden.clone();
+    let folder_calc_gen_clone = folder_calc_gen.clone();
     ui.on_navigate_to(move |raw_path| {
         let Some(ui) = ui_weak.upgrade() else { return };
         let raw = raw_path.to_string();
@@ -356,13 +479,14 @@ fn main() -> Result<(), slint::PlatformError> {
         ui.set_can_go_forward(nav_ref.can_forward());
         drop(nav_ref);
 
-        apply_directory(&ui, &resolved, *show_hidden_clone.borrow());
+        apply_directory(&ui, &resolved, *show_hidden_clone.borrow(), &folder_calc_gen_clone);
     });
 
     // ── navigate-special (Desktop, Downloads, etc.) ──────────────────────────
     let ui_weak = ui.as_weak();
     let nav_clone = nav.clone();
     let show_hidden_clone = show_hidden.clone();
+    let folder_calc_gen_clone = folder_calc_gen.clone();
     ui.on_navigate_special(move |kind| {
         let Some(ui) = ui_weak.upgrade() else { return };
         let target = resolve_special_path(&kind);
@@ -374,12 +498,13 @@ fn main() -> Result<(), slint::PlatformError> {
         ui.set_can_go_forward(nav_ref.can_forward());
         drop(nav_ref);
 
-        apply_directory(&ui, &resolved, *show_hidden_clone.borrow());
+        apply_directory(&ui, &resolved, *show_hidden_clone.borrow(), &folder_calc_gen_clone);
     });
 
     // ── navigate-home (This PC) ──────────────────────────────────────────────
     let ui_weak = ui.as_weak();
     let nav_clone = nav.clone();
+    let folder_calc_gen_clone = folder_calc_gen.clone();
     ui.on_navigate_home(move || {
         let Some(ui) = ui_weak.upgrade() else { return };
         nav_clone.borrow_mut().push(NavTarget::Home);
@@ -387,13 +512,14 @@ fn main() -> Result<(), slint::PlatformError> {
         ui.set_can_go_back(nav_ref.can_back());
         ui.set_can_go_forward(nav_ref.can_forward());
         drop(nav_ref);
-        apply_home(&ui);
+        apply_home(&ui, &folder_calc_gen_clone);
     });
 
     // ── navigate-up ───────────────────────────────────────────────────────────
     let ui_weak = ui.as_weak();
     let nav_clone = nav.clone();
     let show_hidden_clone = show_hidden.clone();
+    let folder_calc_gen_clone = folder_calc_gen.clone();
     ui.on_navigate_up(move || {
         let Some(ui) = ui_weak.upgrade() else { return };
         let current_str = ui.get_current_path().to_string();
@@ -409,14 +535,14 @@ fn main() -> Result<(), slint::PlatformError> {
                 ui.set_can_go_back(nav_ref.can_back());
                 ui.set_can_go_forward(nav_ref.can_forward());
                 drop(nav_ref);
-                apply_home(&ui);
+                apply_home(&ui, &folder_calc_gen_clone);
             } else {
                 nav_clone.borrow_mut().push(NavTarget::Directory(parent.clone()));
                 let nav_ref = nav_clone.borrow();
                 ui.set_can_go_back(nav_ref.can_back());
                 ui.set_can_go_forward(nav_ref.can_forward());
                 drop(nav_ref);
-                apply_directory(&ui, &parent, *show_hidden_clone.borrow());
+                apply_directory(&ui, &parent, *show_hidden_clone.borrow(), &folder_calc_gen_clone);
             }
         } else {
             nav_clone.borrow_mut().push(NavTarget::Home);
@@ -424,7 +550,7 @@ fn main() -> Result<(), slint::PlatformError> {
             ui.set_can_go_back(nav_ref.can_back());
             ui.set_can_go_forward(nav_ref.can_forward());
             drop(nav_ref);
-            apply_home(&ui);
+            apply_home(&ui, &folder_calc_gen_clone);
         }
     });
 
@@ -432,6 +558,7 @@ fn main() -> Result<(), slint::PlatformError> {
     let ui_weak = ui.as_weak();
     let nav_clone = nav.clone();
     let show_hidden_clone = show_hidden.clone();
+    let folder_calc_gen_clone = folder_calc_gen.clone();
     ui.on_navigate_back(move || {
         let Some(ui) = ui_weak.upgrade() else { return };
         let mut nav_ref = nav_clone.borrow_mut();
@@ -442,8 +569,8 @@ fn main() -> Result<(), slint::PlatformError> {
             ui.set_can_go_back(can_back);
             ui.set_can_go_forward(can_forward);
             match target {
-                NavTarget::Home => apply_home(&ui),
-                NavTarget::Directory(path) => apply_directory(&ui, &path, *show_hidden_clone.borrow()),
+                NavTarget::Home => apply_home(&ui, &folder_calc_gen_clone),
+                NavTarget::Directory(path) => apply_directory(&ui, &path, *show_hidden_clone.borrow(), &folder_calc_gen_clone),
             }
         }
     });
@@ -452,6 +579,7 @@ fn main() -> Result<(), slint::PlatformError> {
     let ui_weak = ui.as_weak();
     let nav_clone = nav.clone();
     let show_hidden_clone = show_hidden.clone();
+    let folder_calc_gen_clone = folder_calc_gen.clone();
     ui.on_navigate_forward(move || {
         let Some(ui) = ui_weak.upgrade() else { return };
         let mut nav_ref = nav_clone.borrow_mut();
@@ -462,8 +590,8 @@ fn main() -> Result<(), slint::PlatformError> {
             ui.set_can_go_back(can_back);
             ui.set_can_go_forward(can_forward);
             match target {
-                NavTarget::Home => apply_home(&ui),
-                NavTarget::Directory(path) => apply_directory(&ui, &path, *show_hidden_clone.borrow()),
+                NavTarget::Home => apply_home(&ui, &folder_calc_gen_clone),
+                NavTarget::Directory(path) => apply_directory(&ui, &path, *show_hidden_clone.borrow(), &folder_calc_gen_clone),
             }
         }
     });
@@ -471,71 +599,101 @@ fn main() -> Result<(), slint::PlatformError> {
     // ── refresh ───────────────────────────────────────────────────────────────
     let ui_weak = ui.as_weak();
     let show_hidden_clone = show_hidden.clone();
+    let folder_calc_gen_clone = folder_calc_gen.clone();
     ui.on_refresh(move || {
         let Some(ui) = ui_weak.upgrade() else { return };
         let current_str = ui.get_current_path().to_string();
         if current_str.is_empty() {
             ui.set_disks(ModelRc::new(VecModel::from(collect_disks())));
-            apply_home(&ui);
+            apply_home(&ui, &folder_calc_gen_clone);
         } else {
             let path = PathBuf::from(&current_str);
-            apply_directory(&ui, &path, *show_hidden_clone.borrow());
+            apply_directory(&ui, &path, *show_hidden_clone.borrow(), &folder_calc_gen_clone);
         }
     });
 
-    // ── key-nav (letter navigation in directory) ──────────────────────────────
+    // ── key-nav (letter navigation in directory and home) ─────────────────────
     let ui_weak = ui.as_weak();
+    let folder_calc_gen_clone = folder_calc_gen.clone();
     ui.on_key_nav(move |ch| {
         let Some(ui) = ui_weak.upgrade() else { return };
-        if ui.get_browse_state() != BrowseState::Directory {
-            return;
-        }
         let ch_str = ch.to_string();
         if ch_str.is_empty() {
             return;
         }
 
-        let current_sel = ui.get_selected_index();
-        let files = ui.get_files();
-        let count = files.row_count();
-        if count == 0 {
-            return;
-        }
-
         let query = ch_str.to_lowercase();
-        let mut matches = Vec::new();
-        for i in 0..count {
-            if let Some(entry) = files.row_data(i) {
-                let name = entry.name.to_lowercase();
-                if name.starts_with(&query) {
-                    matches.push(i as i32);
+        let current_sel = ui.get_selected_index();
+
+        match ui.get_browse_state() {
+            BrowseState::Home => {
+                let disks = ui.get_disks();
+                let count = disks.row_count();
+                if count == 0 {
+                    return;
                 }
+                let mut matches = Vec::new();
+                for i in 0..count {
+                    if let Some(disk) = disks.row_data(i) {
+                        let name = disk.title.to_lowercase();
+                        if name.starts_with(&query) {
+                            matches.push(i as i32);
+                        }
+                    }
+                }
+                if matches.is_empty() {
+                    return;
+                }
+                let next_index = if let Some(pos) = matches.iter().position(|&idx| idx == current_sel) {
+                    let next_pos = (pos + 1) % matches.len();
+                    matches[next_pos]
+                } else {
+                    matches[0]
+                };
+                ui.set_selected_index(next_index);
+                update_details_for_selection(&ui, &folder_calc_gen_clone);
             }
+            BrowseState::Directory => {
+                let files = ui.get_files();
+                let count = files.row_count();
+                if count == 0 {
+                    return;
+                }
+                let mut matches = Vec::new();
+                for i in 0..count {
+                    if let Some(entry) = files.row_data(i) {
+                        let name = entry.name.to_lowercase();
+                        if name.starts_with(&query) {
+                            matches.push(i as i32);
+                        }
+                    }
+                }
+                if matches.is_empty() {
+                    return;
+                }
+                let next_index = if let Some(pos) = matches.iter().position(|&idx| idx == current_sel) {
+                    let next_pos = (pos + 1) % matches.len();
+                    matches[next_pos]
+                } else {
+                    matches[0]
+                };
+                ui.set_selected_index(next_index);
+                update_details_for_selection(&ui, &folder_calc_gen_clone);
+            }
+            _ => {}
         }
-
-        if matches.is_empty() {
-            return;
-        }
-
-        let next_index = if let Some(pos) = matches.iter().position(|&idx| idx == current_sel) {
-            let next_pos = (pos + 1) % matches.len();
-            matches[next_pos]
-        } else {
-            matches[0]
-        };
-
-        ui.set_selected_index(next_index);
-        update_details_for_selection(&ui);
     });
 
     // ── navigate-arrows ───────────────────────────────────────────────────────
     let ui_weak = ui.as_weak();
+    let folder_calc_gen_clone = folder_calc_gen.clone();
     ui.on_navigate_arrows(move |delta| {
         let Some(ui) = ui_weak.upgrade() else { return };
-        if ui.get_browse_state() != BrowseState::Directory {
-            return;
-        }
-        let count = ui.get_files().row_count() as i32;
+        let count = match ui.get_browse_state() {
+            BrowseState::Home => ui.get_disks().row_count() as i32,
+            BrowseState::Directory => ui.get_files().row_count() as i32,
+            _ => 0,
+        };
         if count == 0 {
             return;
         }
@@ -546,27 +704,25 @@ fn main() -> Result<(), slint::PlatformError> {
             (current + delta).clamp(0, count - 1)
         };
         ui.set_selected_index(next);
-        update_details_for_selection(&ui);
+        update_details_for_selection(&ui, &folder_calc_gen_clone);
     });
 
     // ── activate-selected (Enter key) ─────────────────────────────────────────
     let ui_weak = ui.as_weak();
     let nav_clone = nav.clone();
     let show_hidden_clone = show_hidden.clone();
+    let folder_calc_gen_clone = folder_calc_gen.clone();
     ui.on_activate_selected(move || {
         let Some(ui) = ui_weak.upgrade() else { return };
-        if ui.get_browse_state() != BrowseState::Directory {
-            return;
-        }
         let sel = ui.get_selected_index();
         if sel < 0 {
             return;
         }
-        let files = ui.get_files();
-        if let Some(entry) = files.row_data(sel as usize) {
-            if entry.is_dir {
-                let current_str = ui.get_current_path().to_string();
-                let target = PathBuf::from(&current_str).join(entry.name.to_string());
+
+        if ui.get_browse_state() == BrowseState::Home {
+            let disks = ui.get_disks();
+            if let Some(disk) = disks.row_data(sel as usize) {
+                let target = PathBuf::from(disk.mount.to_string());
                 let resolved = target.canonicalize().unwrap_or(target);
 
                 nav_clone.borrow_mut().push(NavTarget::Directory(resolved.clone()));
@@ -575,13 +731,34 @@ fn main() -> Result<(), slint::PlatformError> {
                 ui.set_can_go_forward(nav_ref.can_forward());
                 drop(nav_ref);
 
-                apply_directory(&ui, &resolved, *show_hidden_clone.borrow());
+                apply_directory(&ui, &resolved, *show_hidden_clone.borrow(), &folder_calc_gen_clone);
+            }
+            return;
+        }
+
+        if ui.get_browse_state() == BrowseState::Directory {
+            let files = ui.get_files();
+            if let Some(entry) = files.row_data(sel as usize) {
+                if entry.is_dir {
+                    let current_str = ui.get_current_path().to_string();
+                    let target = PathBuf::from(&current_str).join(entry.name.to_string());
+                    let resolved = target.canonicalize().unwrap_or(target);
+
+                    nav_clone.borrow_mut().push(NavTarget::Directory(resolved.clone()));
+                    let nav_ref = nav_clone.borrow();
+                    ui.set_can_go_back(nav_ref.can_back());
+                    ui.set_can_go_forward(nav_ref.can_forward());
+                    drop(nav_ref);
+
+                    apply_directory(&ui, &resolved, *show_hidden_clone.borrow(), &folder_calc_gen_clone);
+                }
             }
         }
     });
 
     // ── Sorting ───────────────────────────────────────────────────────────────
     let ui_weak = ui.as_weak();
+    let folder_calc_gen_clone = folder_calc_gen.clone();
     ui.on_sort_changed(move |field, order| {
         let Some(ui) = ui_weak.upgrade() else { return };
         if ui.get_browse_state() != BrowseState::Directory {
@@ -594,7 +771,7 @@ fn main() -> Result<(), slint::PlatformError> {
         sort_entries(&mut entries, field, order);
         ui.set_files(ModelRc::new(VecModel::from(entries)));
         ui.set_selected_index(-1);
-        update_details_for_selection(&ui);
+        update_details_for_selection(&ui, &folder_calc_gen_clone);
     });
 
     // ── View Mode changed ─────────────────────────────────────────────────────
@@ -607,6 +784,7 @@ fn main() -> Result<(), slint::PlatformError> {
     // ── New folder action ─────────────────────────────────────────────────────
     let ui_weak = ui.as_weak();
     let show_hidden_clone = show_hidden.clone();
+    let folder_calc_gen_clone = folder_calc_gen.clone();
     ui.on_new_folder(move || {
         let Some(ui) = ui_weak.upgrade() else { return };
         let current_str = ui.get_current_path().to_string();
@@ -621,12 +799,13 @@ fn main() -> Result<(), slint::PlatformError> {
             counter += 1;
         }
         let _ = fs::create_dir(base_dir.join(&folder_name));
-        apply_directory(&ui, &base_dir, *show_hidden_clone.borrow());
+        apply_directory(&ui, &base_dir, *show_hidden_clone.borrow(), &folder_calc_gen_clone);
     });
 
     // ── Delete action ─────────────────────────────────────────────────────────
     let ui_weak = ui.as_weak();
     let show_hidden_clone = show_hidden.clone();
+    let folder_calc_gen_clone = folder_calc_gen.clone();
     ui.on_delete(move || {
         let Some(ui) = ui_weak.upgrade() else { return };
         let sel = ui.get_selected_index();
@@ -642,7 +821,7 @@ fn main() -> Result<(), slint::PlatformError> {
             } else {
                 let _ = fs::remove_file(&path);
             }
-            apply_directory(&ui, &PathBuf::from(&current_str), *show_hidden_clone.borrow());
+            apply_directory(&ui, &PathBuf::from(&current_str), *show_hidden_clone.borrow(), &folder_calc_gen_clone);
         }
     });
 
@@ -678,6 +857,7 @@ fn main() -> Result<(), slint::PlatformError> {
     let ui_weak = ui.as_weak();
     let clip_clone = clipboard.clone();
     let show_hidden_clone = show_hidden.clone();
+    let folder_calc_gen_clone = folder_calc_gen.clone();
     ui.on_paste(move || {
         let Some(ui) = ui_weak.upgrade() else { return };
         let current_str = ui.get_current_path().to_string();
@@ -700,12 +880,13 @@ fn main() -> Result<(), slint::PlatformError> {
         }
         drop(clip);
 
-        apply_directory(&ui, &dest_dir, *show_hidden_clone.borrow());
+        apply_directory(&ui, &dest_dir, *show_hidden_clone.borrow(), &folder_calc_gen_clone);
     });
 
     // ── Toggle Hidden files ───────────────────────────────────────────────────
     let ui_weak = ui.as_weak();
     let show_hidden_clone = show_hidden.clone();
+    let folder_calc_gen_clone = folder_calc_gen.clone();
     ui.on_toggle_hidden(move || {
         let Some(ui) = ui_weak.upgrade() else { return };
         let mut val = show_hidden_clone.borrow_mut();
@@ -715,7 +896,7 @@ fn main() -> Result<(), slint::PlatformError> {
 
         let current_str = ui.get_current_path().to_string();
         if !current_str.is_empty() {
-            apply_directory(&ui, &PathBuf::from(&current_str), is_hidden);
+            apply_directory(&ui, &PathBuf::from(&current_str), is_hidden, &folder_calc_gen_clone);
         }
     });
 
