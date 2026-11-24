@@ -5,13 +5,16 @@ import { DiskInfo } from "../types.slint";
 
 export component DriveCard inherits Rectangle {
     in property <DiskInfo> disk;
+    in property <bool> selected: false;
+    callback clicked();
+    callback double-clicked();
 
     width: 250px;
     height: 80px;
     border-radius: 3px;
-    background: touch.has-hover ? Theme.card-hover : transparent;
+    background: root.selected ? Theme.selected : (touch.has-hover ? Theme.card-hover : transparent);
     border-width: 1px;
-    border-color: touch.has-hover ? Theme.hover-border : transparent;
+    border-color: root.selected ? Theme.accent.with-alpha(0.6) : (touch.has-hover ? Theme.hover-border : transparent);
 
     HorizontalLayout {
         padding: 8px;
@@ -48,10 +51,11 @@ export component DriveCard inherits Rectangle {
         }
     }
 
-    callback double-clicked();
-
     touch := TouchArea {
         mouse-cursor: MouseCursor.pointer;
+        clicked => {
+            root.clicked();
+        }
         double-clicked => {
             root.double-clicked();
         }
