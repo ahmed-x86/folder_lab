@@ -6,6 +6,7 @@ export struct DiskInfo {
     total: string,
     free: string,
     used: float,
+    icon: image,
 }
 
 export struct FileEntry {
@@ -17,6 +18,7 @@ export struct FileEntry {
     date-timestamp: int,
     file-type: string,
     is-hidden: bool,
+    icon: image,
 }
 
 export struct FileDetails {
@@ -36,6 +38,7 @@ export struct FileDetails {
     device: string,
     disk-used-percent: float,
     has-selection: bool,
+    icon: image,
 }
 
 // What the content pane should display
