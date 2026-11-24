@@ -27,9 +27,11 @@ export component FileCard inherits Rectangle {
             height: 48px;
 
             Image {
-                source: root.entry.is-dir
-                    ? @image-url("../icons/folder.svg")
-                    : @image-url("../icons/file.svg");
+                source: root.entry.icon.width > 0
+                    ? root.entry.icon
+                    : (root.entry.is-dir
+                        ? @image-url("../icons/folder.svg")
+                        : @image-url("../icons/file.svg"));
                 width: 48px;
                 height: 48px;
                 image-fit: ImageFit.contain;
