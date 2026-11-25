@@ -2,141 +2,17 @@ import { Theme } from "../theme.slint";
 import { Glyph } from "../components/glyph.slint";
 import { DriveCard } from "../components/drive-card.slint";
 import { FileCard } from "../components/file-card.slint";
+import { DetailsHeaderCell } from "../components/details-header-cell.slint";
+import { DetailsRow } from "../components/details-row.slint";
+import { ScrollArea } from "../components/scroll-area.slint";
 import { DiskInfo, FileEntry, BrowseState, ViewMode, SortField, SortOrder } from "../types.slint";
-import { ScrollView } from "std-widgets.slint";
-
-component DetailsHeaderCell inherits Rectangle {
-    in property <string> title;
-    in property <bool> active: false;
-    in property <SortOrder> order: SortOrder.Ascending;
-    in property <length> col-width;
-    callback clicked();
-
-    width: root.col-width;
-    height: 28px;
-    background: touch.has-hover ? Theme.hover : transparent;
-
-    HorizontalLayout {
-        padding-left: 8px;
-        padding-right: 8px;
-        spacing: 4px;
-        alignment: start;
-
-        Text {
-            text: root.title;
-            font-size: 11px;
-            font-weight: 600;
-            color: root.active ? Theme.accent : Theme.text-secondary;
-            vertical-alignment: center;
-            overflow: elide;
-        }
-
-        if root.active : Glyph {
-            source: root.order == SortOrder.Ascending
-                ? @image-url("../icons/chevron-down.svg")
-                : @image-url("../icons/arrow-up.svg");
-            icon-size: 10px;
-            tint: Theme.accent;
-        }
-    }
-
-    touch := TouchArea {
-        mouse-cursor: MouseCursor.pointer;
-        clicked => { root.clicked(); }
-    }
-}
-
-component DetailsRow inherits Rectangle {
-    in property <FileEntry> entry;
-    in property <bool> selected: false;
-    callback clicked();
-    callback double-clicked();
-
-    height: 28px;
-    border-radius: 3px;
-    background: root.selected
-        ? Theme.selected
-        : (touch.has-hover ? Theme.card-hover : transparent);
-    border-width: 1px;
-    border-color: root.selected ? Theme.accent.with-alpha(0.5) : transparent;
-
-    HorizontalLayout {
-        padding-left: 8px;
-        padding-right: 8px;
-        spacing: 12px;
-        alignment: start;
-
-        // Name with icon
-        HorizontalLayout {
-            width: 260px;
-            spacing: 8px;
-            alignment: start;
-
-            Image {
-                source: root.entry.icon.width > 0
-                    ? root.entry.icon
-                    : (root.entry.is-dir
-                        ? @image-url("../icons/folder.svg")
-                        : @image-url("../icons/file.svg"));
-                width: 16px;
-                height: 16px;
-                image-fit: ImageFit.contain;
-                vertical-alignment: center;
-            }
-
-            Text {
-                text: root.entry.name;
-                font-size: 11px;
-                color: Theme.text;
-                vertical-alignment: center;
-                overflow: elide;
-                horizontal-stretch: 1;
-            }
-        }
-
-        // Date modified
-        Text {
-            width: 140px;
-            text: root.entry.date-modified;
-            font-size: 11px;
-            color: Theme.text-secondary;
-            vertical-alignment: center;
-            overflow: elide;
-        }
-
-        // Type
-        Text {
-            width: 140px;
-            text: root.entry.file-type;
-            font-size: 11px;
-            color: Theme.text-secondary;
-            vertical-alignment: center;
-            overflow: elide;
-        }
-
-        // Size
-        Text {
-            width: 80px;
-            text: root.entry.size;
-            font-size: 11px;
-            color: Theme.text-secondary;
-            vertical-alignment: center;
-            overflow: elide;
-        }
-    }
-
-    touch := TouchArea {
-        mouse-cursor: MouseCursor.pointer;
-        clicked => { root.clicked(); }
-        double-clicked => { root.double-clicked(); }
-    }
-}
+import { ViewModeUtils } from "../view-mode-utils.slint";
 
 export component ContentPane inherits Rectangle {
     in property <[DiskInfo]> disks;
     in property <[FileEntry]> files;
     in property <BrowseState> browse-state: BrowseState.Home;
-    in-out property <ViewMode> view-mode: ViewMode.Grid;
+    in-out property <ViewMode> view-mode: ViewMode.MediumIcons;
     in-out property <SortField> sort-field: SortField.Name;
     in-out property <SortOrder> sort-order: SortOrder.Ascending;
     in-out property <int> selected-index: -1;
@@ -157,20 +33,24 @@ export component ContentPane inherits Rectangle {
     callback cut();
     callback paste();
     callback toggle-details();
+    callback view-mode-changed(ViewMode);
 
     horizontal-stretch: 1;
     background: Theme.bg;
 
-    // Grid sizing and symmetrical centering math
-    property <length> item-width: 96px;
-    property <length> item-height: 94px;
+    // ── حسابات الشبكة، تتغيّر حسب وضع العرض الحالي ──────────────────────
+    property <bool> is-grid: ViewModeUtils.is-grid-layout(root.view-mode);
+    property <length> item-width: ViewModeUtils.cell-width(root.view-mode);
+    property <length> item-height: ViewModeUtils.cell-height(root.view-mode);
+    property <length> icon-px: ViewModeUtils.icon-size(root.view-mode);
+    property <length> row-h: ViewModeUtils.row-height(root.view-mode);
     property <length> item-spacing: 8px;
     property <length> scrollbar-reserve: 14px;
 
     // Available width for the grid items
     property <length> avail-w: max(100px, root.width - root.scrollbar-reserve);
 
-    // Number of full columns that fit in avail-w
+    // Number of full columns that fit in avail-w (only meaningful in grid modes)
     property <int> cols: max(1, floor((root.avail-w - 28px + root.item-spacing) / (root.item-width + root.item-spacing)));
 
     // Total width occupied by all columns
@@ -179,9 +59,26 @@ export component ContentPane inherits Rectangle {
     // Symmetrical left and right padding so right margin equals left margin
     property <length> h-pad: max(14px, floor((root.avail-w - root.grid-w) / 2px) * 1px);
 
+    // Number of rows needed, used to give ScrollArea an explicit
+    // content-height (see scroll-area.slint for why this must be explicit
+    // rather than auto-measured from the `for` loop's children).
+    property <int> item-count: root.browse-state == BrowseState.Home ? root.disks.length : root.files.length;
+    property <int> row-count: root.is-grid
+        ? ceil(root.item-count / root.cols)
+        : root.item-count;
+    // Details has the 28px column header plus a 1px separator and a 4px gap
+    // above the rows, so its rows start lower and need more total height than
+    // List/Content. Using one shared 40px offset left the last rows
+    // unreachable behind the bottom edge of the viewport.
+    property <length> list-top: root.view-mode == ViewMode.Details ? 42px : 14px;
+    property <length> content-h: root.is-grid
+        ? 27px + root.row-count * (root.item-height + root.item-spacing)
+        : root.list-top + 14px + root.row-count * (root.row-h + 1px);
+
     // Selected item position for auto-scroll
-    property <int> sel-row: root.selected-index >= 0 ? (root.view-mode == ViewMode.Grid ? floor(root.selected-index / root.cols) : root.selected-index) : -1;
-    property <length> sel-y: root.sel-row >= 0 ? (root.view-mode == ViewMode.Grid ? 14px + root.sel-row * (root.item-height + root.item-spacing) : 32px + root.sel-row * 28px) : 0px;
+    property <int> sel-row: root.selected-index >= 0 ? (root.is-grid ? floor(root.selected-index / root.cols) : root.selected-index) : -1;
+    property <length> sel-y: root.sel-row >= 0 ? (root.is-grid ? 14px + root.sel-row * (root.item-height + root.item-spacing) : root.list-top + root.sel-row * (root.row-h + 1px)) : 0px;
+    property <length> item-visible-h: root.is-grid ? root.item-height : root.row-h;
 
     public function focus-pane() {
         fs.focus();
@@ -191,14 +88,32 @@ export component ContentPane inherits Rectangle {
         if (root.sel-row >= 0) {
             if (root.sel-y < -scroll.content-y) {
                 scroll.content-y = min(0px, -root.sel-y + 14px);
-            } else if (root.sel-y + 30px > -scroll.content-y + scroll.visible-height) {
-                scroll.content-y = min(0px, -(root.sel-y + 30px - scroll.visible-height + 14px));
+            } else if (root.sel-y + root.item-visible-h > -scroll.content-y + scroll.visible-height) {
+                scroll.content-y = min(0px, -(root.sel-y + root.item-visible-h - scroll.visible-height + 14px));
             }
         }
     }
 
     changed selected-index => {
         root.ensure-visible();
+    }
+
+    // عند تغيّر وضع العرض (من قائمة View أو من Ctrl+Wheel) يتغيّر معنى
+    // "صف واحد" (قد يصبح عدد الأعمدة مختلفًا)، فنعيد ضبط التمرير لأعلى
+    // كي لا يبقى المستخدم في موضع تمرير عشوائي بالنسبة للتخطيط الجديد.
+    changed view-mode => {
+        scroll.content-y = 0px;
+        scroll.content-x = 0px;
+    }
+
+    public function zoom-in() {
+        root.view-mode = ViewModeUtils.zoom-in(root.view-mode);
+        root.view-mode-changed(root.view-mode);
+    }
+
+    public function zoom-out() {
+        root.view-mode = ViewModeUtils.zoom-out(root.view-mode);
+        root.view-mode-changed(root.view-mode);
     }
 
     forward-focus: fs;
@@ -258,12 +173,24 @@ export component ContentPane inherits Rectangle {
                     root.paste();
                     return accept;
                 }
+                // Ctrl+Plus / Ctrl+Minus step through view modes, matching
+                // the Ctrl+Wheel behaviour for people without a mouse wheel.
+                if (ev.text == "+" || ev.text == "=") {
+                    root.zoom-in();
+                    return accept;
+                }
+                if (ev.text == "-" || ev.text == "_") {
+                    root.zoom-out();
+                    return accept;
+                }
                 if (ev.text == "1") {
-                    root.view-mode = ViewMode.Grid;
+                    root.view-mode = ViewMode.LargeIcons;
+                    root.view-mode-changed(root.view-mode);
                     return accept;
                 }
                 if (ev.text == "2") {
                     root.view-mode = ViewMode.Details;
+                    root.view-mode-changed(root.view-mode);
                     return accept;
                 }
                 if (ev.text == "d" || ev.text == "D") {
@@ -294,11 +221,11 @@ export component ContentPane inherits Rectangle {
                 return accept;
             }
             if (ev.text == Key.UpArrow) {
-                root.navigate-arrows(root.browse-state == BrowseState.Home ? -1 : (root.view-mode == ViewMode.Grid ? -root.cols : -1));
+                root.navigate-arrows(root.browse-state == BrowseState.Home ? -1 : (root.is-grid ? -root.cols : -1));
                 return accept;
             }
             if (ev.text == Key.DownArrow) {
-                root.navigate-arrows(root.browse-state == BrowseState.Home ? 1 : (root.view-mode == ViewMode.Grid ? root.cols : 1));
+                root.navigate-arrows(root.browse-state == BrowseState.Home ? 1 : (root.is-grid ? root.cols : 1));
                 return accept;
             }
             if (ev.text == Key.LeftArrow) {
@@ -318,71 +245,68 @@ export component ContentPane inherits Rectangle {
             reject
         }
 
-        scroll := ScrollView {
+        scroll := ScrollArea {
             horizontal-stretch: 1;
             vertical-stretch: 1;
+            content-width: root.width;
+            content-height: root.content-h;
 
             // ── HOME: show drive cards ───────────────────────────────────────
-            if root.browse-state == BrowseState.Home : TouchArea {
-                clicked => {
-                    root.selected-index = -1;
-                    fs.focus();
+            if root.browse-state == BrowseState.Home : VerticalLayout {
+                padding-left: 14px;
+                padding-right: 14px;
+                padding-top: 14px;
+                padding-bottom: 14px;
+                spacing: 10px;
+
+                HorizontalLayout {
+                    spacing: 6px;
+
+                    Glyph {
+                        source: @image-url("../icons/chevron-down.svg");
+                        tint: Theme.mono-tint;
+                        icon-size: 10px;
+                        faded: 0.65;
+                    }
+
+                    Text {
+                        text: "Devices and drives";
+                        font-size: 13px;
+                        font-weight: 600;
+                        color: Theme.text;
+                        vertical-alignment: center;
+                    }
                 }
 
-                VerticalLayout {
-                    padding-left: 14px;
-                    padding-right: 14px;
-                    padding-top: 14px;
-                    padding-bottom: 14px;
-                    spacing: 10px;
+                FlexboxLayout {
+                    spacing: 8px;
 
-                    HorizontalLayout {
-                        spacing: 6px;
-
-                        Glyph {
-                            source: @image-url("../icons/chevron-down.svg");
-                            tint: Theme.mono-tint;
-                            icon-size: 10px;
-                            faded: 0.65;
+                    for disk[i] in root.disks : DriveCard {
+                        disk: disk;
+                        selected: root.selected-index == i;
+                        clicked => {
+                            root.selected-index = i;
+                            fs.focus();
                         }
-
-                        Text {
-                            text: "Devices and drives";
-                            font-size: 13px;
-                            font-weight: 600;
-                            color: Theme.text;
-                            vertical-alignment: center;
+                        double-clicked => {
+                            root.navigate-to(disk.mount);
                         }
                     }
-
-                    FlexboxLayout {
-                        spacing: 8px;
-
-                        for disk[i] in root.disks : DriveCard {
-                            disk: disk;
-                            selected: root.selected-index == i;
-                            clicked => {
-                                root.selected-index = i;
-                                fs.focus();
-                            }
-                            double-clicked => {
-                                root.navigate-to(disk.mount);
-                            }
-                        }
-                    }
-
-                    if root.disks.length == 0 : Text {
-                        text: "No mounted partitions were found.";
-                        font-size: 12px;
-                        color: Theme.text-muted;
-                    }
-
-                    Rectangle { }
                 }
+
+                if root.disks.length == 0 : Text {
+                    text: "No mounted partitions were found.";
+                    font-size: 12px;
+                    color: Theme.text-muted;
+                }
+
+                Rectangle { }
             }
 
-            // ── DIRECTORY: Grid view ─────────────────────────────────────────
-            if root.browse-state == BrowseState.Directory && root.view-mode == ViewMode.Grid : TouchArea {
+            // ── DIRECTORY: grid-like views (Extra large / Large / Medium / Small icons / Tiles) ──
+            // الـTouchArea الأب هنا لا يلتقط نقرات البطاقات (الأبناء يُستقبلون
+            // أولًا)، لكنه يعيد سلوك النقر على المساحة الفارغة لإلغاء التحديد.
+            if root.browse-state == BrowseState.Directory && root.is-grid : TouchArea {
                 clicked => {
                     root.selected-index = -1;
                     fs.focus();
@@ -401,6 +325,10 @@ export component ContentPane inherits Rectangle {
                     for entry[i] in root.files : FileCard {
                         entry: entry;
                         selected: root.selected-index == i;
+                        card-width: root.item-width;
+                        card-height: root.item-height;
+                        icon-size: root.icon-px;
+                        label-beside-icon: root.view-mode == ViewMode.SmallIcons || root.view-mode == ViewMode.Tiles;
                         clicked => {
                             root.selected-index = i;
                             fs.focus();
@@ -410,23 +338,24 @@ export component ContentPane inherits Rectangle {
                                 root.navigate-to(entry.name);
                             }
                         }
+                        zoom-requested(dir) => {
+                            if (dir > 0) {
+                                root.zoom-in();
+                            } else {
+                                root.zoom-out();
+                            }
+                        }
                     }
                 }
             }
 
-            // ── DIRECTORY: Details view (List matching Image 2) ──────────────
-            if root.browse-state == BrowseState.Directory && root.view-mode == ViewMode.Details : TouchArea {
-                clicked => {
-                    root.selected-index = -1;
-                    fs.focus();
-                }
-
-                VerticalLayout {
-                    padding-left: 14px;
-                    padding-right: 14px;
-                    padding-top: 8px;
-                    padding-bottom: 14px;
-                    spacing: 1px;
+            // ── DIRECTORY: Details view (full column header + rows) ──────────
+            if root.browse-state == BrowseState.Directory && root.view-mode == ViewMode.Details : VerticalLayout {
+                padding-left: 14px;
+                padding-right: 14px;
+                padding-top: 8px;
+                padding-bottom: 14px;
+                spacing: 1px;
 
                     // Header row
                     HorizontalLayout {
@@ -472,20 +401,47 @@ export component ContentPane inherits Rectangle {
                         background: Theme.separator;
                     }
 
-                    Rectangle { height: 4px; }
+                Rectangle { height: 4px; }
 
-                    // Items rows
-                    for entry[i] in root.files : DetailsRow {
-                        entry: entry;
-                        selected: root.selected-index == i;
-                        clicked => {
-                            root.selected-index = i;
-                            fs.focus();
+                // Items rows
+                for entry[i] in root.files : DetailsRow {
+                    entry: entry;
+                    mode: ViewMode.Details;
+                    row-height: root.row-h;
+                    selected: root.selected-index == i;
+                    clicked => {
+                        root.selected-index = i;
+                        fs.focus();
+                    }
+                    double-clicked => {
+                        if (entry.is-dir) {
+                            root.navigate-to(entry.name);
                         }
-                        double-clicked => {
-                            if (entry.is-dir) {
-                                root.navigate-to(entry.name);
-                            }
+                    }
+                }
+            }
+
+            // ── DIRECTORY: List / Content views (no header, name-focused rows) ──
+            if root.browse-state == BrowseState.Directory
+                && (root.view-mode == ViewMode.List || root.view-mode == ViewMode.Content) : VerticalLayout {
+                padding-left: 14px;
+                padding-right: 14px;
+                padding-top: 14px;
+                padding-bottom: 14px;
+                spacing: 1px;
+
+                for entry[i] in root.files : DetailsRow {
+                    entry: entry;
+                    mode: root.view-mode;
+                    row-height: root.row-h;
+                    selected: root.selected-index == i;
+                    clicked => {
+                        root.selected-index = i;
+                        fs.focus();
+                    }
+                    double-clicked => {
+                        if (entry.is-dir) {
+                            root.navigate-to(entry.name);
                         }
                     }
                 }
