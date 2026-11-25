@@ -35,7 +35,7 @@ export component AppWindow inherits Window {
     in property <BrowseState> browse-state: BrowseState.Home;
 
     // View mode: Grid or Details
-    in-out property <ViewMode> view-mode: ViewMode.Grid;
+    in-out property <ViewMode> view-mode: ViewMode.MediumIcons;
 
     // Sorting
     in-out property <SortField> sort-field: SortField.Name;
@@ -49,6 +49,7 @@ export component AppWindow inherits Window {
 
     // Toggle for right Details pane
     in-out property <bool> show-details: true;
+    in-out property <bool> show-preview-pane: false;
 
     // Navigation history
     in-out property <[string]> history: [];
@@ -106,6 +107,7 @@ export component AppWindow inherits Window {
             sort-field <=> root.sort-field;
             sort-order <=> root.sort-order;
             show-details <=> root.show-details;
+            show-preview-pane <=> root.show-preview-pane;
 
             new-folder => { root.new-folder(); }
             cut => { root.cut(); }
@@ -171,6 +173,7 @@ export component AppWindow inherits Window {
                 cut => { root.cut(); }
                 paste => { root.paste(); }
                 toggle-details => { root.show-details = !root.show-details; }
+                view-mode-changed(m) => { root.view-mode-changed(m); }
                 sort-requested(f) => {
                     if (root.sort-field == f) {
                         root.sort-order = (root.sort-order == SortOrder.Ascending) ? SortOrder.Descending : SortOrder.Ascending;
