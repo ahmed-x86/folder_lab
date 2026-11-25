@@ -1,0 +1,150 @@
+import { Theme } from "../theme.slint";
+
+// مكوّن سكرول مخصص، مبني على نفس بنية `ScrollView` الرسمية في Slint
+// (Flickable + ScrollBar يدوي)، مع إصلاح جوهري واحد لحالة هذا التطبيق:
+//
+// السبب الفعلي لعدم عمل السكرول في الكود الأصلي: `ScrollView` تحسب
+// `content-height` تلقائيًا من حجم أبنائها، لكن توثيق Slint نفسه ينص
+// صراحة على أن هذا الحساب التلقائي لا يعمل عندما تُستخدم حلقة `for` لملء
+// العناصر (وهو بالضبط ما يحدث هنا مع شبكة/قائمة الملفات). لذلك هنا
+// `content-height` يُمرَّر **صراحة** من الخارج (`in property <length>
+// content-height`) بدل الاعتماد على القياس التلقائي.
+//
+// ملاحظة مهمة: لا نضع أي TouchArea شفاف فوق الـFlickable لالتقاط عجلة
+// الماوس. الـFlickable نفسه يتعامل مع العجلة أصلًا، وأي TouchArea يغطي
+// المحتوى يعترض ضغطات الماوس كلها (TouchArea تمسك مؤشر الفأرة دائمًا)
+// فتصبح البطاقات غير قابلة للتحديد. لهذا تُعالَج Ctrl+Wheel داخل
+// FileCard نفسه (انظر file-card.slint) ويبقى السكرول العادي للـFlickable.
+export component ScrollArea inherits Rectangle {
+    in property <length> content-height: 0px;
+    in property <length> content-width: 0px;
+    in-out property <length> content-y: 0px;
+    in-out property <length> content-x: 0px;
+    out property <length> visible-height: flickable.height;
+    out property <length> visible-width: flickable.width;
+
+    clip: true;
+
+    flickable := Flickable {
+        x: 0px;
+        y: 0px;
+        width: parent.width;
+        height: parent.height;
+        interactive: true;
+        mouse-drag-pan-enabled: true;
+        content-width: root.content-width;
+        content-height: root.content-height;
+        content-x <=> root.content-x;
+        content-y <=> root.content-y;
+
+        @children
+    }
+
+    // ── شريط التمرير العمودي ────────────────────────────────────────────
+    property <length> v-max: max(0px, root.content-height - flickable.height);
+    property <bool> v-needed: root.v-max > 0px;
+
+    if root.v-needed : Rectangle {
+        width: v-track.has-hover || v-thumb-touch.pressed ? 10px : 6px;
+        x: parent.width - self.width - 3px;
+        y: 3px;
+        height: parent.height - 6px;
+        border-radius: self.width / 2;
+        background: transparent;
+
+        animate width { duration: 100ms; }
+
+        v-track := TouchArea {
+            width: parent.width;
+            height: parent.height;
+        }
+
+        v-thumb := Rectangle {
+            property <length> track-h: parent.height;
+            property <length> min-thumb: 24px;
+            height: max(self.min-thumb, root.v-max > 0px ? self.track-h * flickable.height / root.content-height : self.track-h);
+            width: parent.width;
+            y: root.v-max > 0px ? (-root.content-y / root.v-max) * (self.track-h - self.height) : 0px;
+            border-radius: self.width / 2;
+            background: v-thumb-touch.pressed
+                ? Theme.accent
+                : (v-thumb-touch.has-hover || v-track.has-hover ? Theme.hover.mix(Theme.accent, 0.35) : Theme.separator);
+
+            v-thumb-touch := TouchArea {
+                property <length> press-content-y;
+                property <length> press-mouse-y;
+
+                width: parent.width;
+                height: parent.height;
+
+                pointer-event(event) => {
+                    if (event.kind == PointerEventKind.down) {
+                        self.press-content-y = root.content-y;
+                        self.press-mouse-y = self.mouse-y;
+                    }
+                }
+
+                moved => {
+                    if (self.pressed && v-thumb.track-h > v-thumb.height) {
+                        root.content-y = max(-root.v-max, min(0px, self.press-content-y
+                            - (self.mouse-y - self.press-mouse-y) * (root.v-max / (v-thumb.track-h - v-thumb.height))));
+                    }
+                }
+            }
+        }
+    }
+
+    // ── شريط التمرير الأفقي (نادر الاستخدام هنا، لكنه موجود لاكتمال المكوّن) ──
+    property <length> h-max: max(0px, root.content-width - flickable.width);
+    property <bool> h-needed: root.h-max > 0px;
+
+    if root.h-needed : Rectangle {
+        height: h-track.has-hover || h-thumb-touch.pressed ? 10px : 6px;
+        y: parent.height - self.height - 3px;
+        x: 3px;
+        width: parent.width - 6px - (root.v-needed ? 10px : 0px);
+        border-radius: self.height / 2;
+        background: transparent;
+
+        animate height { duration: 100ms; }
+
+        h-track := TouchArea {
+            width: parent.width;
+            height: parent.height;
+        }
+
+        h-thumb := Rectangle {
+            property <length> track-w: parent.width;
+            property <length> min-thumb: 24px;
+            width: max(self.min-thumb, root.h-max > 0px ? self.track-w * flickable.width / root.content-width : self.track-w);
+            height: parent.height;
+            x: root.h-max > 0px ? (-root.content-x / root.h-max) * (self.track-w - self.width) : 0px;
+            border-radius: self.height / 2;
+            background: h-thumb-touch.pressed
+                ? Theme.accent
+                : (h-thumb-touch.has-hover || h-track.has-hover ? Theme.hover.mix(Theme.accent, 0.35) : Theme.separator);
+
+            h-thumb-touch := TouchArea {
+                property <length> press-content-x;
+                property <length> press-mouse-x;
+
+                width: parent.width;
+                height: parent.height;
+
+                pointer-event(event) => {
+                    if (event.kind == PointerEventKind.down) {
+                        self.press-content-x = root.content-x;
+                        self.press-mouse-x = self.mouse-x;
+                    }
+                }
+
+                moved => {
+                    if (self.pressed && h-thumb.track-w > h-thumb.width) {
+                        root.content-x = max(-root.h-max, min(0px, self.press-content-x
+                            - (self.mouse-x - self.press-mouse-x) * (root.h-max / (h-thumb.track-w - h-thumb.width))));
+                    }
+                }
+            }
+        }
+    }
+}
