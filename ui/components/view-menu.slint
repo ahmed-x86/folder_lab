@@ -1,0 +1,153 @@
+import { Theme } from "../theme.slint";
+import { Glyph } from "./glyph.slint";
+import { ViewMode } from "../types.slint";
+
+component ViewMenuItem inherits Rectangle {
+    in property <string> label;
+    in property <image> icon;
+    in property <bool> has-icon: true;
+    in property <bool> is-selected: false;
+    in property <bool> is-radio-dot: false;
+    callback clicked();
+
+    height: 26px;
+    border-radius: 4px;
+    background: touch.has-hover ? Theme.hover : (root.is-selected ? Theme.selected : transparent);
+
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        spacing: 8px;
+
+        if root.is-radio-dot : Rectangle {
+            width: 12px;
+            height: 12px;
+            border-radius: 6px;
+            y: (parent.height - self.height) / 2;
+            border-width: 1px;
+            border-color: Theme.text-secondary;
+            background: transparent;
+
+            if root.is-selected : Rectangle {
+                width: 6px;
+                height: 6px;
+                border-radius: 3px;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                background: Theme.accent;
+            }
+        }
+
+        if root.has-icon && !root.is-radio-dot : Glyph {
+            source: root.icon;
+            icon-size: 12px;
+            tint: root.is-selected ? Theme.accent : Theme.mono-tint;
+        }
+
+        Text {
+            text: root.label;
+            font-size: 11px;
+            color: root.is-selected ? Theme.accent : Theme.text;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+        }
+    }
+
+    touch := TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+// قائمة "View" المنسدلة الكاملة: سبعة أوضاع عرض (Extra large icons حتى
+// Content) ثم فاصل ثم Details pane / Preview pane، بنفس شكل قائمة Windows
+// Explorer. مكوّن مستقل بملفه الخاص يستقبل `current-mode` ويُصدر
+// `mode-selected` عند الاختيار، بدل كتابة كل هذا داخل CommandBar مباشرة.
+export component ViewMenu inherits Rectangle {
+    in property <ViewMode> current-mode: ViewMode.MediumIcons;
+    in property <bool> show-details-pane: true;
+    in property <bool> show-preview-pane: false;
+
+    callback mode-selected(ViewMode);
+    callback details-pane-toggled();
+    callback preview-pane-toggled();
+
+    width: 190px;
+    border-radius: 6px;
+    border-width: 1px;
+    border-color: Theme.field-border;
+    background: Theme.field-bg;
+    drop-shadow-blur: 16px;
+    drop-shadow-color: #00000055;
+    drop-shadow-offset-y: 4px;
+
+    VerticalLayout {
+        padding: 4px;
+        spacing: 1px;
+
+        ViewMenuItem {
+            label: "Extra large icons";
+            is-radio-dot: true;
+            is-selected: root.current-mode == ViewMode.ExtraLargeIcons;
+            clicked => { root.mode-selected(ViewMode.ExtraLargeIcons); }
+        }
+        ViewMenuItem {
+            label: "Large icons";
+            is-radio-dot: true;
+            is-selected: root.current-mode == ViewMode.LargeIcons;
+            clicked => { root.mode-selected(ViewMode.LargeIcons); }
+        }
+        ViewMenuItem {
+            label: "Medium-sized icons";
+            is-radio-dot: true;
+            is-selected: root.current-mode == ViewMode.MediumIcons;
+            clicked => { root.mode-selected(ViewMode.MediumIcons); }
+        }
+        ViewMenuItem {
+            label: "Small icons";
+            is-radio-dot: true;
+            is-selected: root.current-mode == ViewMode.SmallIcons;
+            clicked => { root.mode-selected(ViewMode.SmallIcons); }
+        }
+        ViewMenuItem {
+            label: "List";
+            is-radio-dot: true;
+            is-selected: root.current-mode == ViewMode.List;
+            clicked => { root.mode-selected(ViewMode.List); }
+        }
+        ViewMenuItem {
+            label: "Details";
+            is-radio-dot: true;
+            is-selected: root.current-mode == ViewMode.Details;
+            clicked => { root.mode-selected(ViewMode.Details); }
+        }
+        ViewMenuItem {
+            label: "Tiles";
+            is-radio-dot: true;
+            is-selected: root.current-mode == ViewMode.Tiles;
+            clicked => { root.mode-selected(ViewMode.Tiles); }
+        }
+        ViewMenuItem {
+            label: "Content";
+            is-radio-dot: true;
+            is-selected: root.current-mode == ViewMode.Content;
+            clicked => { root.mode-selected(ViewMode.Content); }
+        }
+
+        Rectangle { height: 1px; background: Theme.separator; }
+
+        ViewMenuItem {
+            label: "Details pane";
+            has-icon: false;
+            icon: @image-url("../icons/details.svg");
+            is-selected: root.show-details-pane;
+            clicked => { root.details-pane-toggled(); }
+        }
+        ViewMenuItem {
+            label: "Preview pane";
+            has-icon: false;
+            is-selected: root.show-preview-pane;
+            clicked => { root.preview-pane-toggled(); }
+        }
+    }
+}
