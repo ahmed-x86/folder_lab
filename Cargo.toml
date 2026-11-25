@@ -17,7 +17,3 @@ opt-level = "s"
 lto = true
 strip = true
 
-# async-executor 1.14.0 is the only version available in the local cargo cache,
-# but its index entry is marked yanked. Patching it keeps offline builds working.
-[patch.crates-io]
-async-executor = { path = "vendor/async-executor-1.14.0" }
