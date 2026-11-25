@@ -1,5 +1,6 @@
 import { Theme } from "../theme.slint";
 import { Glyph } from "../components/glyph.slint";
+import { ViewMenu } from "../components/view-menu.slint";
 import { ViewMode, SortField, SortOrder } from "../types.slint";
 
 component ToolbarButton inherits Rectangle {
@@ -57,10 +58,11 @@ export component CommandBar inherits Rectangle {
 
     in property <bool> has-selection: false;
     in property <bool> is-dir-selected: false;
-    in-out property <ViewMode> view-mode: ViewMode.Grid;
+    in-out property <ViewMode> view-mode: ViewMode.MediumIcons;
     in-out property <SortField> sort-field: SortField.Name;
     in-out property <SortOrder> sort-order: SortOrder.Ascending;
     in-out property <bool> show-details: true;
+    in-out property <bool> show-preview-pane: false;
 
     callback new-folder();
     callback cut();
@@ -148,7 +150,7 @@ export component CommandBar inherits Rectangle {
 
         // View menu button
         view-btn := ToolbarButton {
-            icon: root.view-mode == ViewMode.Grid ? @image-url("../icons/view-grid.svg") : @image-url("../icons/view-details.svg");
+            icon: root.view-mode == ViewMode.Details ? @image-url("../icons/view-details.svg") : @image-url("../icons/view-grid.svg");
             label: "View";
             has-dropdown: true;
             active: root.view-menu-open;
@@ -300,58 +302,35 @@ export component CommandBar inherits Rectangle {
         }
     }
 
-    // View Dropdown Menu
-    if root.view-menu-open : Rectangle {
+    // View Dropdown Menu — مكوّنها الفعلي فى components/view-menu.slint
+    if root.view-menu-open : ViewMenu {
         x: view-btn.x;
         y: parent.height + 2px;
-        width: 140px;
-        border-radius: 6px;
-        border-width: 1px;
-        border-color: Theme.field-border;
-        background: Theme.field-bg;
         z: 100;
+        current-mode: root.view-mode;
+        show-details-pane: root.show-details;
+        show-preview-pane: root.show-preview-pane;
 
-        VerticalLayout {
-            padding: 4px;
-            spacing: 2px;
-
-            menu-grid := Rectangle {
-                height: 26px;
-                border-radius: 4px;
-                background: touch-grid.has-hover ? Theme.hover : (root.view-mode == ViewMode.Grid ? Theme.selected : transparent);
-                HorizontalLayout {
-                    padding-left: 8px;
-                    spacing: 6px;
-                    Glyph { source: @image-url("../icons/view-grid.svg"); icon-size: 12px; }
-                    Text { text: "Large icons"; font-size: 11px; color: Theme.text; vertical-alignment: center; }
-                }
-                touch-grid := TouchArea {
-                    clicked => {
-                        root.view-mode = ViewMode.Grid;
-                        root.view-mode-changed(ViewMode.Grid);
-                        root.view-menu-open = false;
-                    }
-                }
+        mode-selected(mode) => {
+            root.view-mode = mode;
+            root.view-mode-changed(mode);
+            root.view-menu-open = false;
+        }
+        details-pane-toggled => {
+            root.show-details = !root.show-details;
+            if (root.show-details) {
+                root.show-preview-pane = false;
             }
-
-            menu-details := Rectangle {
-                height: 26px;
-                border-radius: 4px;
-                background: touch-details.has-hover ? Theme.hover : (root.view-mode == ViewMode.Details ? Theme.selected : transparent);
-                HorizontalLayout {
-                    padding-left: 8px;
-                    spacing: 6px;
-                    Glyph { source: @image-url("../icons/view-details.svg"); icon-size: 12px; }
-                    Text { text: "Details"; font-size: 11px; color: Theme.text; vertical-alignment: center; }
-                }
-                touch-details := TouchArea {
-                    clicked => {
-                        root.view-mode = ViewMode.Details;
-                        root.view-mode-changed(ViewMode.Details);
-                        root.view-menu-open = false;
-                    }
-                }
+            root.toggle-details();
+            root.view-menu-open = false;
+        }
+        preview-pane-toggled => {
+            root.show-preview-pane = !root.show-preview-pane;
+            if (root.show-preview-pane) {
+                root.show-details = false;
+                root.toggle-details();
             }
+            root.view-menu-open = false;
         }
     }
 }
