@@ -1,20 +1,40 @@
 import { Theme } from "../theme.slint";
 import { FileEntry } from "../types.slint";
 
+// بطاقة شبكة واحدة (أيقونة فوق الاسم)، تستخدمها كل أوضاع "Icons" الأربعة
+// (Extra large / Large / Medium / Small) بنفس المكوّن، بفارق `icon-size`
+// و`card-width`/`card-height` فقط يحسبهما ContentPane حسب الوضع الحالي.
 export component FileCard inherits Rectangle {
     in property <FileEntry> entry;
     in property <bool> selected: false;
+    in property <length> card-width: 96px;
+    in property <length> card-height: 94px;
+    in property <length> icon-size: 48px;
+    // الأحجام الصغيرة جدًا (Small icons) تضيق كثيرًا عن احتواء الاسم تحت
+    // الأيقونة بشكل مقروء، فنعرض الاسم بجانبها أفقيًا بدل تحتها كما تفعل
+    // أغلب مدراء الملفات في وضع "Small icons".
+    in property <bool> label-beside-icon: false;
     callback double-clicked();
     callback clicked();
+    // Ctrl+Wheel فوق البطاقة: 1 = تكبير، -1 = تصغير.
+    callback zoom-requested(int);
 
-    width: 96px;
-    height: 94px;
+    width: root.card-width;
+    height: root.card-height;
     border-radius: 4px;
     background: root.selected ? Theme.selected : (touch.has-hover ? Theme.card-hover : transparent);
     border-width: 1px;
     border-color: root.selected ? Theme.accent.with-alpha(0.6) : (touch.has-hover ? Theme.hover-border : transparent);
 
-    VerticalLayout {
+    // مصدر الأيقونة يُحسب مرة واحدة هنا، بدل تعريف Image زائد خارج التخطيط
+    // (كان هذا الـImage الإضافي يُرسم في زاوية البطاقة ويتعارض مع التخطيط).
+    property <image> icon-source: root.entry.icon.width > 0
+        ? root.entry.icon
+        : (root.entry.is-dir
+            ? @image-url("../icons/folder.svg")
+            : @image-url("../icons/file.svg"));
+
+    if !root.label-beside-icon : VerticalLayout {
         alignment: center;
         spacing: 6px;
         padding-left: 6px;
@@ -24,16 +44,12 @@ export component FileCard inherits Rectangle {
 
         HorizontalLayout {
             alignment: center;
-            height: 48px;
+            height: root.icon-size + 4px;
 
             Image {
-                source: root.entry.icon.width > 0
-                    ? root.entry.icon
-                    : (root.entry.is-dir
-                        ? @image-url("../icons/folder.svg")
-                        : @image-url("../icons/file.svg"));
-                width: 48px;
-                height: 48px;
+                source: root.icon-source;
+                width: root.icon-size;
+                height: root.icon-size;
                 image-fit: ImageFit.contain;
             }
         }
@@ -48,6 +64,31 @@ export component FileCard inherits Rectangle {
         }
     }
 
+    if root.label-beside-icon : HorizontalLayout {
+        alignment: start;
+        spacing: 6px;
+        padding-left: 6px;
+        padding-right: 6px;
+
+        Image {
+            source: root.icon-source;
+            width: root.icon-size;
+            height: root.icon-size;
+            image-fit: ImageFit.contain;
+            vertical-alignment: center;
+        }
+
+        Text {
+            text: root.entry.name;
+            font-size: 11px;
+            color: Theme.text;
+            vertical-alignment: center;
+            overflow: TextOverflow.elide;
+            wrap: TextWrap.no-wrap;
+            horizontal-stretch: 1;
+        }
+    }
+
     touch := TouchArea {
         mouse-cursor: MouseCursor.pointer;
         clicked => {
@@ -55,6 +96,19 @@ export component FileCard inherits Rectangle {
         }
         double-clicked => {
             root.double-clicked();
+        }
+        // Ctrl+Wheel = تغيير وضع العرض (تكبير/تصغير)، وأي عجلة أخرى تُرفض
+        // ليصل الحدث إلى الـFlickable الذي يمرّر المحتوى بشكل طبيعي.
+        scroll-event(event) => {
+            if (event.modifiers.control) {
+                if (event.delta-y > 0) {
+                    root.zoom-requested(1);
+                } else if (event.delta-y < 0) {
+                    root.zoom-requested(-1);
+                }
+                return accept;
+            }
+            reject
         }
     }
 }
