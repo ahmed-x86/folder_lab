@@ -1,0 +1,126 @@
+import { ViewMode } from "types.slint";
+
+// Central place for everything that depends on "which ViewMode is bigger
+// than which": icon pixel size per mode, grid cell size per mode, and the
+// zoom stepping used by Ctrl+Wheel. Keeping this in one global means
+// ContentPane and the View dropdown menu never disagree about ordering.
+export global ViewModeUtils {
+    // Icon pixel size shown inside a grid/tile cell for each mode.
+    public pure function icon-size(mode: ViewMode) -> length {
+        if (mode == ViewMode.ExtraLargeIcons) {
+            return 96px;
+        } else if (mode == ViewMode.LargeIcons) {
+            return 64px;
+        } else if (mode == ViewMode.MediumIcons) {
+            return 48px;
+        } else if (mode == ViewMode.SmallIcons) {
+            return 24px;
+        } else if (mode == ViewMode.Tiles) {
+            return 32px;
+        } else if (mode == ViewMode.Content) {
+            return 40px;
+        }
+        // List / Details: small inline icon, handled by their own rows.
+        return 16px;
+    }
+
+    // Full grid-cell width (icon + padding) for each mode.
+    public pure function cell-width(mode: ViewMode) -> length {
+        if (mode == ViewMode.ExtraLargeIcons) {
+            return 128px;
+        } else if (mode == ViewMode.LargeIcons) {
+            return 96px;
+        } else if (mode == ViewMode.MediumIcons) {
+            return 84px;
+        } else if (mode == ViewMode.SmallIcons) {
+            // الاسم هنا يُعرض بجانب الأيقونة، فيحتاج عرضًا أكبر بكثير من عرض
+            // الأيقونة نفسها وإلا يُقصّ الاسم إلى حرف أو حرفين.
+            return 160px;
+        } else if (mode == ViewMode.Tiles) {
+            return 220px;
+        } else if (mode == ViewMode.Content) {
+            return 320px;
+        }
+        return 96px;
+    }
+
+    // Full grid-cell height (icon + label + padding) for each mode. لازم أن
+    // تكفي الأيقونة + سطر الاسم + الحشو (6px أعلى/أسفل + 6px فاصل)، وإلا
+    // يرسم Slint الاسم خارج حدود البطاقة فوق الصف التالي.
+    public pure function cell-height(mode: ViewMode) -> length {
+        if (mode == ViewMode.ExtraLargeIcons) {
+            return 132px;
+        } else if (mode == ViewMode.LargeIcons) {
+            return 100px;
+        } else if (mode == ViewMode.MediumIcons) {
+            return 88px;
+        } else if (mode == ViewMode.SmallIcons) {
+            return 36px;
+        } else if (mode == ViewMode.Tiles) {
+            return 56px;
+        } else if (mode == ViewMode.Content) {
+            return 64px;
+        }
+        return 100px;
+    }
+
+    // Row height for the three list-like modes (List / Details / Content).
+    public pure function row-height(mode: ViewMode) -> length {
+        if (mode == ViewMode.Content) {
+            return 64px;
+        }
+        return 28px;
+    }
+
+    // Does this mode lay items out as a wrapping grid (true) or as a
+    // single vertical list of full-width rows (false)?
+    public pure function is-grid-layout(mode: ViewMode) -> bool {
+        return mode == ViewMode.ExtraLargeIcons
+            || mode == ViewMode.LargeIcons
+            || mode == ViewMode.MediumIcons
+            || mode == ViewMode.SmallIcons
+            || mode == ViewMode.Tiles;
+    }
+
+    // Zoom one step "bigger" (towards ExtraLargeIcons), clamped at the top.
+    // Ctrl+Wheel-up walks the whole ladder, including the list-like modes,
+    // exactly like Explorer's own slider does.
+    public pure function zoom-in(mode: ViewMode) -> ViewMode {
+        if (mode == ViewMode.Content) {
+            return ViewMode.Tiles;
+        } else if (mode == ViewMode.Tiles) {
+            return ViewMode.Details;
+        } else if (mode == ViewMode.Details) {
+            return ViewMode.List;
+        } else if (mode == ViewMode.List) {
+            return ViewMode.SmallIcons;
+        } else if (mode == ViewMode.SmallIcons) {
+            return ViewMode.MediumIcons;
+        } else if (mode == ViewMode.MediumIcons) {
+            return ViewMode.LargeIcons;
+        } else if (mode == ViewMode.LargeIcons) {
+            return ViewMode.ExtraLargeIcons;
+        }
+        return ViewMode.ExtraLargeIcons;
+    }
+
+    // Zoom one step "smaller" (towards Content), clamped at the bottom.
+    public pure function zoom-out(mode: ViewMode) -> ViewMode {
+        if (mode == ViewMode.ExtraLargeIcons) {
+            return ViewMode.LargeIcons;
+        } else if (mode == ViewMode.LargeIcons) {
+            return ViewMode.MediumIcons;
+        } else if (mode == ViewMode.MediumIcons) {
+            return ViewMode.SmallIcons;
+        } else if (mode == ViewMode.SmallIcons) {
+            return ViewMode.List;
+        } else if (mode == ViewMode.List) {
+            return ViewMode.Details;
+        } else if (mode == ViewMode.Details) {
+            return ViewMode.Tiles;
+        } else if (mode == ViewMode.Tiles) {
+            return ViewMode.Content;
+        }
+        return ViewMode.Content;
+    }
+}
