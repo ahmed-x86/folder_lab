@@ -1,0 +1,46 @@
+import { Theme } from "../theme.slint";
+import { Glyph } from "./glyph.slint";
+import { SortOrder } from "../types.slint";
+
+// رأس عمود واحد في عرض Details (مثل "Name" أو "Date modified")، قابل
+// للضغط لتبديل ترتيب الفرز، ويعرض سهم الاتجاه عند كونه العمود النشط.
+export component DetailsHeaderCell inherits Rectangle {
+    in property <string> title;
+    in property <bool> active: false;
+    in property <SortOrder> order: SortOrder.Ascending;
+    in property <length> col-width;
+    callback clicked();
+
+    width: root.col-width;
+    height: 28px;
+    background: touch.has-hover ? Theme.hover : transparent;
+
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        spacing: 4px;
+        alignment: start;
+
+        Text {
+            text: root.title;
+            font-size: 11px;
+            font-weight: 600;
+            color: root.active ? Theme.accent : Theme.text-secondary;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+
+        if root.active : Glyph {
+            source: root.order == SortOrder.Ascending
+                ? @image-url("../icons/chevron-down.svg")
+                : @image-url("../icons/arrow-up.svg");
+            icon-size: 10px;
+            tint: Theme.accent;
+        }
+    }
+
+    touch := TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.clicked(); }
+    }
+}
