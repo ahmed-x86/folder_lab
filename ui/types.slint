@@ -49,9 +49,19 @@ export enum BrowseState {
     Empty,
 }
 
+// Matches the classic Windows Explorer "View" menu, ordered from the
+// largest grid icons down to the most compact list, so that the enum's
+// declaration order doubles as the zoom order used by Ctrl+Wheel and the
+// Ctrl+Plus/Minus style stepping.
 export enum ViewMode {
-    Grid,
+    ExtraLargeIcons,
+    LargeIcons,
+    MediumIcons,
+    SmallIcons,
+    List,
     Details,
+    Tiles,
+    Content,
 }
 
 export enum SortField {
