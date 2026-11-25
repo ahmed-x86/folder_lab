@@ -5,7 +5,7 @@ import { ViewMode } from "../types.slint";
 export component StatusBar inherits Rectangle {
     in property <int> item-count: 0;
     in property <int> selected-count: 0;
-    in-out property <ViewMode> view-mode: ViewMode.Grid;
+    in-out property <ViewMode> view-mode: ViewMode.MediumIcons;
     callback view-mode-changed(ViewMode);
 
     height: 24px;
@@ -60,22 +60,22 @@ export component StatusBar inherits Rectangle {
             width: 22px;
             height: 20px;
             border-radius: 3px;
-            background: root.view-mode == ViewMode.Grid
+            background: root.view-mode == ViewMode.MediumIcons
                 ? Theme.selected
                 : (touch-grid.has-hover ? Theme.hover : transparent);
 
             Glyph {
                 source: @image-url("../icons/view-grid.svg");
-                tint: root.view-mode == ViewMode.Grid ? Theme.accent : Theme.mono-tint;
+                tint: root.view-mode == ViewMode.MediumIcons ? Theme.accent : Theme.mono-tint;
                 icon-size: 14px;
-                faded: root.view-mode == ViewMode.Grid ? 1.0 : 0.65;
+                faded: root.view-mode == ViewMode.MediumIcons ? 1.0 : 0.65;
             }
 
             touch-grid := TouchArea {
                 mouse-cursor: MouseCursor.pointer;
                 clicked => {
-                    root.view-mode = ViewMode.Grid;
-                    root.view-mode-changed(ViewMode.Grid);
+                    root.view-mode = ViewMode.MediumIcons;
+                    root.view-mode-changed(ViewMode.MediumIcons);
                 }
             }
         }
