@@ -413,7 +413,7 @@ fn main() -> Result<(), slint::PlatformError> {
     ui.set_disks(ModelRc::new(VecModel::from(collect_disks(&icon_theme))));
     ui.set_files(ModelRc::new(VecModel::from(vec![])));
     ui.set_browse_state(BrowseState::Home);
-    ui.set_view_mode(ViewMode::Grid);
+    ui.set_view_mode(ViewMode::MediumIcons);
     ui.set_sort_field(SortField::Name);
     ui.set_sort_order(SortOrder::Ascending);
     ui.set_show_details(true);
